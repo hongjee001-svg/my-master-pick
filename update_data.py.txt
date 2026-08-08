@@ -1,0 +1,47 @@
+from pykrx import stock
+import datetime
+import pandas as pd
+import numpy as np
+import time
+
+print("📊 데이터 수집을 시작합니다... (약 30초 소요)")
+
+# 1. 최근 영업일 찾기
+today = datetime.datetime.today()
+recent_day = ""
+for i in range(15):
+    target_date = (today - datetime.timedelta(days=i)).strftime("%Y%m%d")
+    try:
+        if not stock.get_market_fundamental_by_ticker(target_date, market="KOSPI").empty:
+            recent_day = target_date
+            break
+    except:
+        pass
+    time.sleep(0.1)
+
+print(f"✅ 기준일: {recent_day} 데이터 다운로드 중...")
+
+# 2. 데이터 가져오기
+df_kospi = stock.get_market_fundamental_by_ticker(recent_day, market="KOSPI")
+time.sleep(0.5)
+df_kosdaq = stock.get_market_fundamental_by_ticker(recent_day, market="KOSDAQ")
+time.sleep(0.5)
+cap_kospi = stock.get_market_cap_by_ticker(recent_day, market="KOSPI")
+time.sleep(0.5)
+cap_kosdaq = stock.get_market_cap_by_ticker(recent_day, market="KOSDAQ")
+
+# 3. 데이터 합치기 및 계산
+df_f = pd.concat([df_kospi, df_kosdaq])
+df_c = pd.concat([cap_kospi, cap_kosdaq])
+df = df_f.join(df_c[['시가총액']])
+
+df['종목명'] = [stock.get_market_ticker_name(t) for t in df.index]
+df = df.reset_index().rename(columns={'티커': '종목코드'})
+df['ROE(%)'] = np.where(df['PER'] > 0, (df['PBR'] / df['PER']) * 100, 0)
+df['시가총액(억)'] = (df['시가총액'] / 100000000).round(0)
+
+# 4. 파일 저장
+df = df[['종목명', '종목코드', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']]
+df.to_csv("stock_data.csv", index=False, encoding='utf-8-sig')
+
+print("🎉 완료! 'stock_data.csv' 파일이 성공적으로 생성되었습니다.")
