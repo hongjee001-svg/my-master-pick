@@ -42,7 +42,8 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
         for i in range(10):
             check_date = (today - datetime.timedelta(days=i)).strftime("%Y%m%d")
             try:
-                chk_df = stock.get_market_fundamental_by_date(check_date, market="KOSPI")
+                # 📌 [수정된 부분] _by_date 를 _by_ticker 로 변경!
+                chk_df = stock.get_market_fundamental_by_ticker(check_date, market="KOSPI")
                 if not chk_df.empty and chk_df['PER'].sum() > 0:
                     recent_day = check_date
                     break
@@ -50,13 +51,15 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
                 continue
         
         # 코스피/코스닥 데이터 로드
-        df_kospi = stock.get_market_fundamental_by_date(recent_day, market="KOSPI")
-        df_kosdaq = stock.get_market_fundamental_by_date(recent_day, market="KOSDAQ")
+        # 📌 [수정된 부분] _by_date 를 _by_ticker 로 변경!
+        df_kospi = stock.get_market_fundamental_by_ticker(recent_day, market="KOSPI")
+        df_kosdaq = stock.get_market_fundamental_by_ticker(recent_day, market="KOSDAQ")
         df = pd.concat([df_kospi, df_kosdaq])
         
         # 시가총액 데이터 추가 로드
-        cap_kospi = stock.get_market_cap_by_date(recent_day, market="KOSPI")
-        cap_kosdaq = stock.get_market_cap_by_date(recent_day, market="KOSDAQ")
+        # 📌 [수정된 부분] _by_date 를 _by_ticker 로 변경!
+        cap_kospi = stock.get_market_cap_by_ticker(recent_day, market="KOSPI")
+        cap_kosdaq = stock.get_market_cap_by_ticker(recent_day, market="KOSDAQ")
         df_cap = pd.concat([cap_kospi, cap_kosdaq])
         
         # 데이터 병합
