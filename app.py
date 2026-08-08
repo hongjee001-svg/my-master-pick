@@ -36,10 +36,18 @@ with st.sidebar:
 if st.button("🚀 스크리닝 및 AI 분석 시작"):
     with st.spinner("한국거래소(KRX) 데이터를 스캔하고 수학적 공식을 계산 중입니다..."):
         
-        # 최신 영업일 조회
+        # ⭐️ 에러 수정 부: 가장 최근 영업일을 안정적으로 자동 탐색하는 로직 ⭐️
         today = datetime.datetime.today()
-        b_days = stock.get_business_days_dates((today - datetime.timedelta(days=14)).strftime("%Y%m%d"), today.strftime("%Y%m%d"))
-        recent_day = b_days[-1].strftime("%Y%m%d")
+        recent_day = today.strftime("%Y%m%d")
+        for i in range(10):
+            check_date = (today - datetime.timedelta(days=i)).strftime("%Y%m%d")
+            try:
+                chk_df = stock.get_market_fundamental_by_date(check_date, market="KOSPI")
+                if not chk_df.empty and chk_df['PER'].sum() > 0:
+                    recent_day = check_date
+                    break
+            except Exception:
+                continue
         
         # 코스피/코스닥 데이터 로드
         df_kospi = stock.get_market_fundamental_by_date(recent_day, market="KOSPI")
@@ -56,28 +64,23 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
         df['종목명'] = [stock.get_market_ticker_name(t) for t in df.index]
         df = df.reset_index().rename(columns={'티커': '종목코드'})
         
-        # ⭐️ 핵심: DART API 없이 PBR과 PER을 역산하여 ROE(자기자본이익률) 1초 만에 추출 ⭐️
-        # PBR = PER * ROE  =>  ROE = (PBR / PER) * 100
+        # PBR과 PER을 역산하여 ROE(자기자본이익률) 추출: ROE = (PBR / PER) * 100
         df['ROE(%)'] = np.where(df['PER'] > 0, (df['PBR'] / df['PER']) * 100, 0)
         df['시가총액(억)'] = (df['시가총액'] / 100000000).round(0)
 
         # ==========================================
-        # 👑 7명의 대가별 완벽 조건식 필터링
+        # 👑 7명의 대가별 조건식 필터링
         # ==========================================
         if "워렌 버핏" in strategy:
-            # 적자 제외, ROE 15% 이상, PER 15 이하, PBR 1.5 이하
             result = df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)]
         
         elif "벤자민 그레이엄" in strategy:
-            # 극강의 저평가: PBR 0.8 이하, PER 10 이하, 시총 1000억 이상
             result = df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)]
             
         elif "피터 린치" in strategy:
-            # 성장+배당: PER 12 이하, ROE 10% 이상, 배당수익률 2% 이상
             result = df[(df['PER'] > 0) & (df['PER'] <= 12) & (df['ROE(%)'] >= 10) & (df['DIV'] >= 2.0)]
             
         elif "조엘 그린블라트" in strategy:
-            # 마법공식: 저 PER(자본수익률 대용) 순위 + 고 ROE 순위 합산 상위 20개
             valid_df = df[(df['PER'] > 0) & (df['ROE(%)'] > 0)].copy()
             valid_df['PER_순위'] = valid_df['PER'].rank(ascending=True)
             valid_df['ROE_순위'] = valid_df['ROE(%)'].rank(ascending=False)
@@ -85,22 +88,18 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
             result = valid_df.sort_values(by='종합순위').head(20)
             
         elif "데이비드 드레먼" in strategy:
-            # 역발상: PER 10 이하, PBR 1 이하, 배당수익률 3% 이상 (시장 소외 우량주)
             result = df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] <= 1.0) & (df['DIV'] >= 3.0)]
             
         elif "존 네프" in strategy:
-            # 저 PER 가치주: PER 6~10 사이, 배당수익률 2% 이상, 시총 3000억 이상
             result = df[(df['PER'] >= 6) & (df['PER'] <= 10) & (df['DIV'] >= 2.0) & (df['시가총액(억)'] >= 3000)]
             
         elif "켄 피셔" in strategy:
-            # 소외된 소형주: 시총 500억~2000억 사이, PBR 1.0 이하, PER 0 초과
             result = df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)]
 
         # 결과 출력 정리
-        st.success(f"🎉 스캔 완료! [{strategy}] 조건에 맞는 종목이 {len(result)}개 발견되었습니다.")
+        st.success(f"🎉 스캔 완료! ({recent_day} 기준 데이터) [{strategy}] 조건에 맞는 종목이 {len(result)}개 발견되었습니다.")
         
         display_df = result[['종목명', '종목코드', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']].copy()
-        # 숫자 깔끔하게 반올림
         display_df['ROE(%)'] = display_df['ROE(%)'].round(2)
         display_df['PER'] = display_df['PER'].round(2)
         display_df['PBR'] = display_df['PBR'].round(2)
@@ -119,7 +118,6 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
             else:
                 with st.spinner("구글 AI가 종목들을 분석하여 리포트를 작성하고 있습니다..."):
                     try:
-                        # 상위 5개 종목명만 추출
                         top_stocks = ", ".join(result['종목명'].head(5).tolist())
                         
                         prompt = f"""
