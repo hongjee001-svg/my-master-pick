@@ -36,20 +36,33 @@ with st.sidebar:
 if st.button("🚀 스크리닝 및 AI 분석 시작"):
     with st.spinner("한국거래소(KRX) 데이터를 스캔하고 수학적 공식을 계산 중입니다..."):
         try:
-            # ⭐️ 에러 완벽 해결: 휴일 무시하고 무조건 마지막 개장일(영업일) 찾기 ⭐️
+            # ⭐️ 가장 완벽한 에러 방어 로직: 오늘부터 과거 15일치 중 에러 안 나는 날짜 찾기 ⭐️
             today = datetime.datetime.today()
-            start_date = (today - datetime.timedelta(days=14)).strftime("%Y%m%d")
-            end_date = today.strftime("%Y%m%d")
+            recent_day = ""
+            df_kospi = pd.DataFrame()
+            df_kosdaq = pd.DataFrame()
             
-            b_days = stock.get_business_days_dates(start_date, end_date)
-            recent_day = b_days[-1].strftime("%Y%m%d") # 가장 마지막 평일(영업일)
-            
-            # 코스피/코스닥 데이터 로드
-            df_kospi = stock.get_market_fundamental_by_ticker(recent_day, market="KOSPI")
-            df_kosdaq = stock.get_market_fundamental_by_ticker(recent_day, market="KOSDAQ")
+            for i in range(15):
+                target_date = (today - datetime.timedelta(days=i)).strftime("%Y%m%d")
+                try:
+                    # 이 날짜로 KOSPI 데이터를 가져와봅니다. (주말/휴일이면 여기서 내부 에러가 나서 except로 빠짐)
+                    temp_k = stock.get_market_fundamental_by_ticker(target_date, market="KOSPI")
+                    
+                    if temp_k is not None and not temp_k.empty:
+                        # 성공했다면 KOSDAQ 데이터도 동일한 날짜로 가져옵니다.
+                        df_kospi = temp_k
+                        df_kosdaq = stock.get_market_fundamental_by_ticker(target_date, market="KOSDAQ")
+                        recent_day = target_date
+                        break # 성공했으니 과거 탐색 루프를 종료합니다.
+                except Exception:
+                    continue # 에러(휴일 등)가 나면 무시하고 하루 더 과거로 돌아갑니다.
+
+            if df_kospi.empty:
+                st.error("최근 주식 시장 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.")
+                st.stop()
+
+            # 위에서 찾은 가장 완벽한 최근 영업일(recent_day)을 기준으로 시가총액 가져오기
             df = pd.concat([df_kospi, df_kosdaq])
-            
-            # 시가총액 데이터 추가 로드
             cap_kospi = stock.get_market_cap_by_ticker(recent_day, market="KOSPI")
             cap_kosdaq = stock.get_market_cap_by_ticker(recent_day, market="KOSDAQ")
             df_cap = pd.concat([cap_kospi, cap_kosdaq])
