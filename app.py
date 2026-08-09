@@ -9,43 +9,57 @@ st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.write("안전하게 업데이트된 데이터베이스를 기반으로 7대 거장의 조건에 맞는 상위 종목들을 한눈에 비교하고 상세히 분석합니다.")
 
 # ==========================================
-# 🔑 세션 스테이트를 이용한 API 키 영구 저장/삭제 시스템
+# 🔑 다중 API 키 목록 관리 (저장, 리스트 표시, 선택, 삭제)
 # ==========================================
-if 'api_key' not in st.session_state:
-    st.session_state['api_key'] = ""
+if 'api_keys' not in st.session_state:
+    st.session_state['api_keys'] = []
 
 with st.sidebar:
-    st.header("⚙️ API 키 및 설정")
+    st.header("⚙️ API 키 관리")
     
-    # 사용자가 입력할 수 있는 입력창 (저장된 게 있다면 기본값으로 보여줌)
-    input_key = st.text_input(
-        "🔑 구글 Gemini API 키 입력", 
-        value=st.session_state['api_key'], 
-        type="password",
-        help="한 번 입력하면 브라우저에 저장되어 다시 입력할 필요가 없습니다."
-    )
+    # 1. 새 키 입력받기
+    new_key = st.text_input("🔑 새 Gemini API 키 추가", type="password", help="키를 입력하고 아래 '키 추가' 버튼을 눌러주세요.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("💾 키 저장"):
-            if input_key.strip():
-                st.session_state['api_key'] = input_key.strip()
-                st.success("API 키가 저장되었습니다!")
+    if st.button("➕ 키 추가"):
+        if new_key.strip():
+            key_clean = new_key.strip()
+            if key_clean not in st.session_state['api_keys']:
+                st.session_state['api_keys'].append(key_clean)
+                st.success("새 API 키가 성공적으로 등록되었습니다!")
+                st.rerun()
             else:
-                st.warning("키를 입력해주세요.")
-    with col2:
-        if st.button("🗑️ 키 삭제"):
-            st.session_state['api_key'] = ""
-            st.success("저장된 키가 삭제되었습니다.")
+                st.warning("이미 등록되어 있는 API 키입니다.")
+        else:
+            st.warning("키를 입력해 주세요.")
+            
+    st.markdown("---")
+    
+    # 2. 등록된 키 목록 확인 및 사용할 키 선택
+    registered_keys = st.session_state['api_keys']
+    st.subheader(f"📋 등록된 API 키 목록 ({len(registered_keys)}개)")
+    
+    current_api_key = ""
+    
+    if registered_keys:
+        # 보기 쉽게 '등록순번 + 마스킹된 키(마지막 5자리)' 형태의 라벨 생성
+        key_options = {f"Key {i+1} (*****{k[-5:] if len(k) >= 5 else k})": k for i, k in enumerate(registered_keys)}
+        
+        selected_label = st.selectbox(
+            "사용할 API 키 선택:",
+            options=list(key_options.keys())
+        )
+        current_api_key = key_options[selected_label]
+        
+        # 선택된 키 개별 삭제 기능
+        if st.button("🗑️ 선택한 키 삭제"):
+            st.session_state['api_keys'].remove(current_api_key)
+            st.success("선택한 API 키가 삭제되었습니다.")
             st.rerun()
             
-    # 등록된 키가 있다면 설정 적용
-    current_api_key = st.session_state['api_key']
-    if current_api_key:
         genai.configure(api_key=current_api_key)
-        st.info("✅ API 키가 활성화되어 있습니다.")
+        st.info("✅ 현재 선택된 키가 활성화되었습니다.")
     else:
-        st.warning("⚠️ API 키가 등록되지 않았습니다. AI 분석을 위해 키를 저장해주세요.")
+        st.warning("⚠️ 등록된 API 키가 없습니다. 키를 추가해 주세요.")
         
     st.markdown("---")
     st.info("💡 **사용 가이드**\n1. 상단 버튼을 눌러 종목 리스트를 불러옵니다.\n2. 7대 거장 탭에서 종목들을 확인합니다.\n3. 원하는 종목의 상세보기 및 AI 리포트를 생성하세요!")
@@ -115,8 +129,8 @@ if st.session_state.get('loaded', False):
                 )
                 
                 if st.button("🤖 이 종목 AI 상세 리포트 생성하기", key=f"btn_{idx}"):
-                    if not st.session_state['api_key']:
-                        st.warning("⚠️ 왼쪽 사이드바에 구글 Gemini API 키를 저장해주세요!")
+                    if not current_api_key:
+                        st.warning("⚠️ 왼쪽 사이드바에 사용 가능한 Gemini API 키를 등록하고 선택해 주세요!")
                     else:
                         with st.spinner(f"구글 AI가 '{selected_stock}' 종목을 정밀 분석 중입니다..."):
                             try:
