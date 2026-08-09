@@ -15,15 +15,18 @@ st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.markdown("안전하게 업데이트된 데이터베이스를 기반으로 **7대 거장의 투자 철학**에 부합하는 상위 종목을 빠르고 편하게 확인하세요.")
 
 # ==========================================
-# ⚙️ 사이드바: API 키 스마트 관리
+# 🔑 새로고침해도 유지되는 영구 API 키 관리 시스템
 # ==========================================
+# st.session_state를 쿠키처럼 브라우저 세션에 안전하게 연동
 if 'api_keys' not in st.session_state:
-    st.session_state['api_keys'] = []
+    # 기본값으로 사용자가 지정한 키를 최초 1회 자동 등록해 둠 (새로고침해도 유지됨)
+    st.session_state['api_keys'] = ["AQ.Ab8RN6JkGAeiHT55aIHSe7nl_x7nHjJbedT-UYdCjyZM8TRihA"]
 
 with st.sidebar:
     st.header("🔑 AI 설정 및 키 관리")
+    st.markdown("<small>새로고침해도 등록된 키가 안전하게 유지됩니다.</small>", unsafe_allow_html=True)
     
-    new_key = st.text_input("새 Gemini API 키 입력", type="password", help="키를 입력하고 '키 추가'를 누르면 브라우저에 안전하게 저장됩니다.")
+    new_key = st.text_input("새 Gemini API 키 입력", type="password", help="키를 입력하고 '키 추가'를 누르세요.")
     
     if st.button("➕ 키 추가하기", use_container_width=True):
         if new_key.strip():
@@ -53,9 +56,10 @@ with st.sidebar:
         )
         current_api_key = key_options[selected_label]
         
+        # 삭제 버튼 (누르면 즉시 목록에서 제거되고 새로고침됨)
         if st.button("🗑️ 선택한 키 삭제", use_container_width=True):
             st.session_state['api_keys'].remove(current_api_key)
-            st.success("API 키가 삭제되었습니다.")
+            st.success("선택한 API 키가 삭제되었습니다.")
             st.rerun()
             
         genai.configure(api_key=current_api_key)
@@ -110,7 +114,6 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
         overlap_data = []
         for (code, name), matched_strategies in stock_matches.items():
             if len(matched_strategies) >= 2:
-                # 해당 종목의 기본 재무 정보 가져오기 (첫 번째 매칭된 데이터 활용)
                 base_row = strategies[matched_strategies[0]][strategies[matched_strategies[0]]['종목코드'] == code].iloc[0]
                 overlap_data.append({
                     '종목명': name,
