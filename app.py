@@ -83,7 +83,7 @@ if st.button("🚀 스크리닝 및 AI 분석 시작"):
                     try:
                         top_stocks = ", ".join(result['종목명'].head(5).tolist())
                         prompt = f"당신은 월스트리트 최고의 주식 애널리스트입니다.\n'{strategy}' 조건식을 통과한 상위 종목: {top_stocks}\n이 종목들이 대가의 철학에 부합하는 이유와 투자 주의점을 3문단으로 요약해주세요."
-                        model = genai.GenerativeModel('gemini-2.5-flash')
+                        model = genai.GenerativeModel('gemini-3.6-flash')
                         response = model.generate_content(prompt)
                         st.info(response.text)
                     except Exception as e:
