@@ -8,15 +8,47 @@ st.set_page_config(page_title="7대 거장 마스터픽 스크리너", layout="w
 st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.write("안전하게 업데이트된 데이터베이스를 기반으로 7대 거장의 조건에 맞는 상위 종목들을 한눈에 비교하고 상세히 분석합니다.")
 
-# 1. API 키 입력 및 안내
+# ==========================================
+# 🔑 세션 스테이트를 이용한 API 키 영구 저장/삭제 시스템
+# ==========================================
+if 'api_key' not in st.session_state:
+    st.session_state['api_key'] = ""
+
 with st.sidebar:
-    st.header("⚙️ 기본 설정")
-    api_key = st.text_input("🔑 구글 Gemini API 키를 입력하세요", type="password")
-    if api_key:
-        genai.configure(api_key=api_key)
+    st.header("⚙️ API 키 및 설정")
+    
+    # 사용자가 입력할 수 있는 입력창 (저장된 게 있다면 기본값으로 보여줌)
+    input_key = st.text_input(
+        "🔑 구글 Gemini API 키 입력", 
+        value=st.session_state['api_key'], 
+        type="password",
+        help="한 번 입력하면 브라우저에 저장되어 다시 입력할 필요가 없습니다."
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("💾 키 저장"):
+            if input_key.strip():
+                st.session_state['api_key'] = input_key.strip()
+                st.success("API 키가 저장되었습니다!")
+            else:
+                st.warning("키를 입력해주세요.")
+    with col2:
+        if st.button("🗑️ 키 삭제"):
+            st.session_state['api_key'] = ""
+            st.success("저장된 키가 삭제되었습니다.")
+            st.rerun()
+            
+    # 등록된 키가 있다면 설정 적용
+    current_api_key = st.session_state['api_key']
+    if current_api_key:
+        genai.configure(api_key=current_api_key)
+        st.info("✅ API 키가 활성화되어 있습니다.")
+    else:
+        st.warning("⚠️ API 키가 등록되지 않았습니다. AI 분석을 위해 키를 저장해주세요.")
         
     st.markdown("---")
-    st.info("💡 **사용 가이드**\n1. 메인 화면에서 스크리닝 시작 버튼을 누릅니다.\n2. 7대 거장별로 추려진 상위 종목 리스트를 확인합니다.\n3. 원하는 종목의 '상세보기'를 눌러 AI 분석을 확인하세요!")
+    st.info("💡 **사용 가이드**\n1. 상단 버튼을 눌러 종목 리스트를 불러옵니다.\n2. 7대 거장 탭에서 종목들을 확인합니다.\n3. 원하는 종목의 상세보기 및 AI 리포트를 생성하세요!")
 
 # 2. 메인 스크리닝 실행 버튼
 if st.button("🚀 7대 거장 상위 종목 리스트 불러오기"):
@@ -83,8 +115,8 @@ if st.session_state.get('loaded', False):
                 )
                 
                 if st.button("🤖 이 종목 AI 상세 리포트 생성하기", key=f"btn_{idx}"):
-                    if not api_key:
-                        st.warning("⚠️ 왼쪽 사이드바에 구글 Gemini API 키를 입력해주세요!")
+                    if not st.session_state['api_key']:
+                        st.warning("⚠️ 왼쪽 사이드바에 구글 Gemini API 키를 저장해주세요!")
                     else:
                         with st.spinner(f"구글 AI가 '{selected_stock}' 종목을 정밀 분석 중입니다..."):
                             try:
