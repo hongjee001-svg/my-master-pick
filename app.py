@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import google.generativeai as genai
 import os
+from streamlit_localstorage import LocalStorage
 
 # 페이지 설정 (와이드 모드)
 st.set_page_config(
@@ -10,20 +11,27 @@ st.set_page_config(
     layout="wide"
 )
 
+# 브라우저 로컬 스토리지 인스턴스 생성
+localS = LocalStorage()
+
 # 메인 타이틀 및 소개
 st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.markdown("안전하게 업데이트된 데이터베이스를 기반으로 **7대 거장의 투자 철학**에 부합하는 상위 종목을 빠르고 편하게 확인하세요.")
 
 # ==========================================
-# 🔑 API 키 관리 시스템
+# 🔑 브라우저 로컬 저장소 기반 영구 API 키 관리 (코드 내 강제 키 없음)
 # ==========================================
-if 'api_keys' not in st.session_state:
-    st.session_state['api_keys'] = []
+saved_keys = localS.getItem("user_api_keys")
+if saved_keys is not None and isinstance(saved_keys, list):
+    st.session_state['api_keys'] = saved_keys
+else:
+    if 'api_keys' not in st.session_state:
+        st.session_state['api_keys'] = []
 
 with st.sidebar:
     st.header("🔑 AI 설정 및 키 관리")
+    st.markdown("<small>추가한 키는 새로고침해도 브라우저에 유지됩니다.</small>", unsafe_allow_html=True)
     
-    # 키 입력 및 추가 폼
     with st.form("key_form", clear_on_submit=True):
         new_key = st.text_input("새 Gemini API 키 입력", type="password")
         submitted = st.form_submit_button("➕ 키 추가하기", use_container_width=True)
@@ -33,7 +41,10 @@ with st.sidebar:
                 key_clean = new_key.strip()
                 if key_clean not in st.session_state['api_keys']:
                     st.session_state['api_keys'].append(key_clean)
+                    # 브라우저 로컬 스토리지에 영구 저장
+                    localS.setItem("user_api_keys", st.session_state['api_keys'])
                     st.success("API 키가 추가되었습니다!")
+                    st.rerun()
                 else:
                     st.warning("이미 등록된 API 키입니다.")
             else:
@@ -55,8 +66,10 @@ with st.sidebar:
         )
         current_api_key = key_options[selected_label]
         
+        # 삭제 버튼 (누르면 목록 및 브라우저 저장소에서 영구 삭제됨)
         if st.button("🗑️ 선택한 키 삭제", use_container_width=True):
             st.session_state['api_keys'].remove(current_api_key)
+            localS.setItem("user_api_keys", st.session_state['api_keys'])
             st.success("선택한 API 키가 삭제되었습니다.")
             st.rerun()
             
