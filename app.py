@@ -41,7 +41,7 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기"):
             "7. 켄 피셔 (소외된 소형 가치주)": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)]
         }
 
-        # 세션 스테이트에 결과 저장 (탭을 이동해도 데이터가 유지되도록 함)
+        # 세션 스테이트에 결과 저장
         st.session_state['strategies'] = strategies
         st.session_state['loaded'] = True
 
@@ -95,9 +95,9 @@ if st.session_state.get('loaded', False):
                                 당신은 월스트리트 최고의 주식 애널리스트입니다.
                                 사용자가 선택한 투자 전략: {strat_name}
                                 분석할 종목명: {stock_info['종목명']} (종목코드: {stock_info['종목코드']})
-                                주요 재무 지표: PER {stock_info['PER']}, PBR {stock_info['PBR']}, ROE {stock_info['ROE(%)']}%, 배당수익률 {stock_info['DIV']}%, 시가총액 {stock_info['시가총액(억)']3}억원
+                                주요 재무 지표: PER {stock_info['PER']}, PBR {stock_info['PBR']}, ROE {stock_info['ROE(%)']}%, 배당수익률 {stock_info['DIV']}%, 시가총액 {stock_info['시가총액(억)']}억원
                                 
-                                위 데이터를 바탕으로 이 종목이 왜 이 거장의 투자 철학(가치, 우량주, 고배당 등)에 부합하는지, 그리고 현재 한국 시장 상황에서 투자할 때 주의해야 할 점을 3문단으로 나누어 전문가처럼 친절하고 명확하게 요약해 주세요.
+                                위 데이터를 바탕으로 이 종목이 왜 이 거장의 투자 철학에 부합하는지, 그리고 현재 한국 시장 상황에서 투자할 때 주의해야 할 점을 3문단으로 나누어 전문가처럼 친절하고 명확하게 요약해 주세요.
                                 """
                                 
                                 model = genai.GenerativeModel('gemini-1.5-flash')
