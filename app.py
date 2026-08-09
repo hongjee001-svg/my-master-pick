@@ -66,8 +66,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📌 이용 가이드")
     st.markdown("1. 상단의 **종목 불러오기** 버튼을 누릅니다.")
-    st.markdown("2. 대가별 카드를 눌러 종목 리스트를 확인합니다.")
-    st.markdown("3. 원하는 종목을 골라 **AI 심층 리포트**를 생성해보세요!")
+    st.markdown("2. 첫 화면에서 **거장들이 공통으로 선택한 중복 종목**을 먼저 확인하세요!")
+    st.markdown("3. 대가별 탭을 눌러 상세 리스트를 확인하고 **AI 심층 리포트**를 생성해보세요.")
 
 # ==========================================
 # 🚀 메인 화면: 스크리닝 실행 버튼
@@ -81,57 +81,94 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
     with st.spinner("데이터베이스를 분석하여 7대 거장의 조건에 맞는 종목을 선별 중입니다..."):
         df = pd.read_csv("stock_data.csv")
         
-        # 7대 거장별 필터링 조건
+        # 7대 거장별 필터링 조건 (상위 50개씩 추출)
         strategies = {
-            "Buffett 버핏 (ROE 우량주)": df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)],
-            "Graham 그레이엄 (안전마진)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)],
-            "Lynch 린치 (고성장 배당)": df[(df['PER'] > 0) & (df['PER'] <= 12) & (df['ROE(%)'] >= 10) & (df['DIV'] >= 2.0)],
-            "Greenblatt 그린블라트 (마법공식)": (lambda d: d.assign(
+            "📈 1. 워렌 버핏": df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)].head(50),
+            "🛡️ 2. 벤자민 그레이엄": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)].head(50),
+            "🚀 3. 피터 린치": df[(df['PER'] > 0) & (df['PER'] <= 12) & (df['ROE(%)'] >= 10) & (df['DIV'] >= 2.0)].head(50),
+            "🧙‍♂️ 4. 조엘 그린블라트": (lambda d: d.assign(
                 PER_순위=d[d['PER'] > 0]['PER'].rank(ascending=True),
                 ROE_순위=d[d['ROE(%)'] > 0]['ROE(%)'].rank(ascending=False)
             ).assign(종합순위=lambda x: x['PER_순위'] + x['ROE_순위']).sort_values(by='종합순위').head(50))(df),
-            "Dreman 드레먼 (역발상 배당)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] <= 1.0) & (df['DIV'] >= 3.0)],
-            "Neff 네프 (저PER 가치)": df[(df['PER'] >= 6) & (df['PER'] <= 10) & (df['DIV'] >= 2.0) & (df['시가총액(억)'] >= 3000)],
-            "Fisher 피셔 (소형 가치주)": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)]
+            "🔄 5. 데이비드 드레먼": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] <= 1.0) & (df['DIV'] >= 3.0)].head(50),
+            "📉 6. 존 네프": df[(df['PER'] >= 6) & (df['PER'] <= 10) & (df['DIV'] >= 2.0) & (df['시가총액(억)'] >= 3000)].head(50),
+            "💎 7. 켄 피셔": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)].head(50)
         }
 
+        # 중복 종목 분석 로직
+        stock_matches = {}
+        for strat_name, res_df in strategies.items():
+            for _, row in res_df.iterrows():
+                code = row['종목코드']
+                name = row['종목명']
+                key = (code, name)
+                if key not in stock_matches:
+                    stock_matches[key] = []
+                stock_matches[key].append(strat_name)
+                
+        # 최소 2개 이상 중복된 종목만 필터링
+        overlap_data = []
+        for (code, name), matched_strategies in stock_matches.items():
+            if len(matched_strategies) >= 2:
+                # 해당 종목의 기본 재무 정보 가져오기 (첫 번째 매칭된 데이터 활용)
+                base_row = strategies[matched_strategies[0]][strategies[matched_strategies[0]]['종목코드'] == code].iloc[0]
+                overlap_data.append({
+                    '종목명': name,
+                    '종목코드': code,
+                    '중복 횟수': len(matched_strategies),
+                    '선택한 거장들': ", ".join(matched_strategies),
+                    'PER': base_row['PER'],
+                    'PBR': base_row['PBR'],
+                    'ROE(%)': base_row['ROE(%)'],
+                    'DIV': base_row['DIV'],
+                    '시가총액(억)': base_row['시가총액(억)']
+                })
+                
+        overlap_df = pd.DataFrame(overlap_data)
+        if not overlap_df.empty:
+            overlap_df = overlap_df.sort_values(by='중복 횟수', ascending=False).reset_index(drop=True)
+            overlap_df.index = overlap_df.index + 1
+
         st.session_state['strategies'] = strategies
+        st.session_state['overlap_df'] = overlap_df
         st.session_state['loaded'] = True
 
 # ==========================================
-# 📊 가독성을 극대화한 거장별 선택 UI
+# 📊 UI 렌더링
 # ==========================================
 if st.session_state.get('loaded', False):
     strategies = st.session_state['strategies']
+    overlap_df = st.session_state['overlap_df']
     
     st.markdown("---")
-    st.markdown("### 2️⃣ 🌟 투자 거장 선택하기")
+    
+    # 🔥 상단 특별 섹션: 거장들 간 중복 선택 종목 하이라이트
+    st.markdown("### 🔥 [종합 추천] 2명 이상의 거장이 동시에 선택한 '중복 집중 공략' 종목")
+    if overlap_df.empty:
+        st.info("현재 2개 이상의 거장 조건에 동시에 겹치는 종목이 없습니다.")
+    else:
+        st.success(f"🎉 총 **{len(overlap_df)}개**의 종목이 여러 거장의 선택을 동시에 받았습니다! 공통으로 겹치는 종목들을 확인해 보세요.")
+        st.dataframe(
+            overlap_df[['종목명', '종목코드', '중복 횟수', '선택한 거장들', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']],
+            use_container_width=True
+        )
+    
+    st.markdown("---")
+    st.markdown("### 2️⃣ 🌟 투자 거장별 개별 리스트 및 AI 심층 분석")
     st.markdown("어떤 거장의 투자 종목 리스트를 확인하고 싶으신가요? 아래에서 원하는 거장을 선택해 주세요.")
     
-    # 탭 디자인에 눈에 띄는 이모지와 스타일 부여
-    tab_titles = [
-        "📈 1. 워렌 버핏", 
-        "🛡️ 2. 벤자민 그레이엄", 
-        "🚀 3. 피터 린치", 
-        "🧙‍♂️ 4. 조엘 그린블라트", 
-        "🔄 5. 데이비드 드레먼", 
-        "📉 6. 존 네프", 
-        "💎 7. 켄 피셔"
-    ]
-    
+    tab_titles = list(strategies.keys())
     tabs = st.tabs(tab_titles)
     
-    for idx, (strat_key, strat_name) in enumerate(zip(strategies.keys(), tab_titles)):
+    for idx, strat_key in enumerate(tab_titles):
         res_df = strategies[strat_key]
         with tabs[idx]:
-            # 강조 박스로 현재 선택된 거장 안내
-            st.success(f"🎯 **{strat_name}** 전략 조건에 부합하는 종목 총 **{len(res_df)}개**가 검색되었습니다.")
+            st.info(f"🎯 **{strat_key}** 전략 조건에 부합하는 종목 총 **{len(res_df)}개**가 검색되었습니다.")
             
             if res_df.empty:
                 st.warning("조건에 만족하는 종목이 없습니다.")
             else:
-                # 상위 50개 제한 및 1부터 시작하는 깔끔한 순위 인덱스 부여
-                display_df = res_df.head(50).copy()
+                display_df = res_df.copy()
                 display_df['ROE(%)'] = display_df['ROE(%)'].round(2)
                 display_df['PER'] = display_df['PER'].round(2)
                 display_df['PBR'] = display_df['PBR'].round(2)
@@ -139,7 +176,6 @@ if st.session_state.get('loaded', False):
                 display_df = display_df.reset_index(drop=True)
                 display_df.index = display_df.index + 1
                 
-                # 종목 리스트 표 출력
                 st.dataframe(
                     display_df[['종목명', '종목코드', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']], 
                     use_container_width=True
@@ -157,7 +193,7 @@ if st.session_state.get('loaded', False):
                         key=f"select_{idx}"
                     )
                 with col2:
-                    st.write("") # 정렬용 공백
+                    st.write("") 
                     st.write("")
                     ai_button = st.button("✨ AI 리포트 생성", key=f"btn_{idx}", use_container_width=True)
                 
