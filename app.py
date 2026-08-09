@@ -41,7 +41,6 @@ with st.sidebar:
     current_api_key = ""
     
     if registered_keys:
-        # 보기 쉽게 '등록순번 + 마스킹된 키(마지막 5자리)' 형태의 라벨 생성
         key_options = {f"Key {i+1} (*****{k[-5:] if len(k) >= 5 else k})": k for i, k in enumerate(registered_keys)}
         
         selected_label = st.selectbox(
@@ -50,7 +49,6 @@ with st.sidebar:
         )
         current_api_key = key_options[selected_label]
         
-        # 선택된 키 개별 삭제 기능
         if st.button("🗑️ 선택한 키 삭제"):
             st.session_state['api_keys'].remove(current_api_key)
             st.success("선택한 API 키가 삭제되었습니다.")
@@ -114,8 +112,12 @@ if st.session_state.get('loaded', False):
                 display_df['PER'] = display_df['PER'].round(2)
                 display_df['PBR'] = display_df['PBR'].round(2)
                 
-                # 1단계: 종목 리스트 표 보여주기
-                st.dataframe(display_df[['종목명', '종목코드', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']].reset_index(drop=True), use_container_width=True)
+                # 순번을 0부터가 아니라 1부터 시작하도록 인덱스 조정
+                display_df = display_df.reset_index(drop=True)
+                display_df.index = display_df.index + 1
+                
+                # 1단계: 종목 리스트 표 보여주기 (인덱스 명칭을 '순위'로 변경하여 출력)
+                st.dataframe(display_df[['종목명', '종목코드', 'PER', 'PBR', 'ROE(%)', 'DIV', '시가총액(억)']], use_container_width=True)
                 
                 # 2단계: 상세보기 및 AI 리포트 섹션
                 st.markdown("---")
