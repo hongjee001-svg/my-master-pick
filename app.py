@@ -15,18 +15,17 @@ st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.markdown("안전하게 업데이트된 데이터베이스를 기반으로 **7대 거장의 투자 철학**에 부합하는 상위 종목을 빠르고 편하게 확인하세요.")
 
 # ==========================================
-# 🔑 새로고침해도 유지되는 영구 API 키 관리 시스템
+# 🔑 스마트 API 키 관리 시스템 (보안 강화형)
 # ==========================================
-# st.session_state를 쿠키처럼 브라우저 세션에 안전하게 연동
 if 'api_keys' not in st.session_state:
-    # 기본값으로 사용자가 지정한 키를 최초 1회 자동 등록해 둠 (새로고침해도 유지됨)
-    st.session_state['api_keys'] = ["AQ.Ab8RN6JkGAeiHT55aIHSe7nl_x7nHjJbedT-UYdCjyZM8TRihA"]
+    # 코드에 비밀키를 절대 미리 적어두지 않고 빈 리스트로 시작 (보안 경고 원천 차단)
+    st.session_state['api_keys'] = []
 
 with st.sidebar:
     st.header("🔑 AI 설정 및 키 관리")
-    st.markdown("<small>새로고침해도 등록된 키가 안전하게 유지됩니다.</small>", unsafe_allow_html=True)
+    st.markdown("<small>직접 추가한 키는 새로고침해도 유지됩니다.</small>", unsafe_allow_html=True)
     
-    new_key = st.text_input("새 Gemini API 키 입력", type="password", help="키를 입력하고 '키 추가'를 누르세요.")
+    new_key = st.text_input("새 Gemini API 키 입력", type="password", help="키를 입력하고 '키 추가하기'를 누르세요.")
     
     if st.button("➕ 키 추가하기", use_container_width=True):
         if new_key.strip():
@@ -56,7 +55,7 @@ with st.sidebar:
         )
         current_api_key = key_options[selected_label]
         
-        # 삭제 버튼 (누르면 즉시 목록에서 제거되고 새로고침됨)
+        # 삭제 버튼 (누르면 목록에서 영구 제거됨)
         if st.button("🗑️ 선택한 키 삭제", use_container_width=True):
             st.session_state['api_keys'].remove(current_api_key)
             st.success("선택한 API 키가 삭제되었습니다.")
@@ -65,7 +64,7 @@ with st.sidebar:
         genai.configure(api_key=current_api_key)
         st.success("✨ 활성화 완료")
     else:
-        st.info("💡 등록된 키가 없습니다. 키를 추가하시면 AI 분석 기능을 쓸 수 있습니다.")
+        st.info("💡 등록된 키가 없습니다. 위 입력창에 키를 추가해 주세요.")
         
     st.markdown("---")
     st.markdown("### 📌 이용 가이드")
@@ -110,7 +109,6 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
                     stock_matches[key] = []
                 stock_matches[key].append(strat_name)
                 
-        # 최소 2개 이상 중복된 종목만 필터링
         overlap_data = []
         for (code, name), matched_strategies in stock_matches.items():
             if len(matched_strategies) >= 2:
@@ -202,7 +200,7 @@ if st.session_state.get('loaded', False):
                 
                 if ai_button:
                     if not current_api_key:
-                        st.warning("⚠️ 왼쪽 사이드바에서 Gemini API 키를 먼저 등록하고 선택해 주세요!")
+                        st.warning("⚠️ 왼쪽 사이드바에서 사용할 Gemini API 키를 선택해 주세요!")
                     else:
                         with st.spinner(f"구글 AI가 '{selected_stock}' 종목을 정밀 분석 중입니다..."):
                             try:
