@@ -66,7 +66,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 📌 이용 가이드")
     st.markdown("1. 상단의 **종목 불러오기** 버튼을 누릅니다.")
-    st.markdown("2. 탭을 눌러 거장별 종목을 확인합니다.")
+    st.markdown("2. 대가별 카드를 눌러 종목 리스트를 확인합니다.")
     st.markdown("3. 원하는 종목을 골라 **AI 심층 리포트**를 생성해보세요!")
 
 # ==========================================
@@ -83,35 +83,49 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
         
         # 7대 거장별 필터링 조건
         strategies = {
-            "1. 워렌 버핏 (ROE 우량주)": df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)],
-            "2. 벤자민 그레이엄 (안전마진)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)],
-            "3. 피터 린치 (고성장 배당)": df[(df['PER'] > 0) & (df['PER'] <= 12) & (df['ROE(%)'] >= 10) & (df['DIV'] >= 2.0)],
-            "4. 조엘 그린블라트 (마법공식)": (lambda d: d.assign(
+            "Buffett 버핏 (ROE 우량주)": df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)],
+            "Graham 그레이엄 (안전마진)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)],
+            "Lynch 린치 (고성장 배당)": df[(df['PER'] > 0) & (df['PER'] <= 12) & (df['ROE(%)'] >= 10) & (df['DIV'] >= 2.0)],
+            "Greenblatt 그린블라트 (마법공식)": (lambda d: d.assign(
                 PER_순위=d[d['PER'] > 0]['PER'].rank(ascending=True),
                 ROE_순위=d[d['ROE(%)'] > 0]['ROE(%)'].rank(ascending=False)
             ).assign(종합순위=lambda x: x['PER_순위'] + x['ROE_순위']).sort_values(by='종합순위').head(50))(df),
-            "5. 데이비드 드레먼 (역발상 고배당)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] <= 1.0) & (df['DIV'] >= 3.0)],
-            "6. 존 네프 (저 PER 가치)": df[(df['PER'] >= 6) & (df['PER'] <= 10) & (df['DIV'] >= 2.0) & (df['시가총액(억)'] >= 3000)],
-            "7. 켄 피셔 (소형 가치주)": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)]
+            "Dreman 드레먼 (역발상 배당)": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] <= 1.0) & (df['DIV'] >= 3.0)],
+            "Neff 네프 (저PER 가치)": df[(df['PER'] >= 6) & (df['PER'] <= 10) & (df['DIV'] >= 2.0) & (df['시가총액(억)'] >= 3000)],
+            "Fisher 피셔 (소형 가치주)": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)]
         }
 
         st.session_state['strategies'] = strategies
         st.session_state['loaded'] = True
 
 # ==========================================
-# 📊 결과 시각화 및 AI 심층 분석 탭
+# 📊 가독성을 극대화한 거장별 선택 UI
 # ==========================================
 if st.session_state.get('loaded', False):
     strategies = st.session_state['strategies']
     
     st.markdown("---")
-    st.markdown("### 2️⃣ 7대 거장별 추천 종목 리스트 및 AI 심층 분석")
+    st.markdown("### 2️⃣ 🌟 투자 거장 선택하기")
+    st.markdown("어떤 거장의 투자 종목 리스트를 확인하고 싶으신가요? 아래에서 원하는 거장을 선택해 주세요.")
     
-    tabs = st.tabs(list(strategies.keys()))
+    # 탭 디자인에 눈에 띄는 이모지와 스타일 부여
+    tab_titles = [
+        "📈 1. 워렌 버핏", 
+        "🛡️ 2. 벤자민 그레이엄", 
+        "🚀 3. 피터 린치", 
+        "🧙‍♂️ 4. 조엘 그린블라트", 
+        "🔄 5. 데이비드 드레먼", 
+        "📉 6. 존 네프", 
+        "💎 7. 켄 피셔"
+    ]
     
-    for idx, (strat_name, res_df) in enumerate(strategies.items()):
+    tabs = st.tabs(tab_titles)
+    
+    for idx, (strat_key, strat_name) in enumerate(zip(strategies.keys(), tab_titles)):
+        res_df = strategies[strat_key]
         with tabs[idx]:
-            st.info(f"✨ **[{strat_name}]** 조건에 부합하는 종목 총 **{len(res_df)}개**가 검색되었습니다.")
+            # 강조 박스로 현재 선택된 거장 안내
+            st.success(f"🎯 **{strat_name}** 전략 조건에 부합하는 종목 총 **{len(res_df)}개**가 검색되었습니다.")
             
             if res_df.empty:
                 st.warning("조건에 만족하는 종목이 없습니다.")
@@ -138,7 +152,7 @@ if st.session_state.get('loaded', False):
                 col1, col2 = st.columns([2, 1])
                 with col1:
                     selected_stock = st.selectbox(
-                        "분석하고 싶은 종목을 선택하세요:",
+                        "상세 분석을 원하는 종목을 선택하세요:",
                         options=display_df['종목명'].tolist(),
                         key=f"select_{idx}"
                     )
@@ -157,7 +171,7 @@ if st.session_state.get('loaded', False):
                                 
                                 prompt = f"""
                                 당신은 월스트리트 최고의 주식 애널리스트입니다.
-                                사용자가 선택한 투자 전략: {strat_name}
+                                사용자가 선택한 투자 전략: {strat_key}
                                 분석할 종목명: {stock_info['종목명']} (종목코드: {stock_info['종목코드']})
                                 주요 재무 지표: PER {stock_info['PER']}, PBR {stock_info['PBR']}, ROE {stock_info['ROE(%)']}%, 배당수익률 {stock_info['DIV']}%, 시가총액 {stock_info['시가총액(억)']}억원
                                 
