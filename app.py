@@ -15,29 +15,29 @@ st.title("👑 7대 거장 마스터픽 주식 스크리너")
 st.markdown("안전하게 업데이트된 데이터베이스를 기반으로 **7대 거장의 투자 철학**에 부합하는 상위 종목을 빠르고 편하게 확인하세요.")
 
 # ==========================================
-# 🔑 스마트 API 키 관리 시스템 (보안 강화형)
+# 🔑 API 키 관리 시스템
 # ==========================================
 if 'api_keys' not in st.session_state:
-    # 코드에 비밀키를 절대 미리 적어두지 않고 빈 리스트로 시작 (보안 경고 원천 차단)
     st.session_state['api_keys'] = []
 
 with st.sidebar:
     st.header("🔑 AI 설정 및 키 관리")
-    st.markdown("<small>직접 추가한 키는 새로고침해도 유지됩니다.</small>", unsafe_allow_html=True)
     
-    new_key = st.text_input("새 Gemini API 키 입력", type="password", help="키를 입력하고 '키 추가하기'를 누르세요.")
-    
-    if st.button("➕ 키 추가하기", use_container_width=True):
-        if new_key.strip():
-            key_clean = new_key.strip()
-            if key_clean not in st.session_state['api_keys']:
-                st.session_state['api_keys'].append(key_clean)
-                st.success("API 키가 추가되었습니다!")
-                st.rerun()
+    # 키 입력 및 추가 폼
+    with st.form("key_form", clear_on_submit=True):
+        new_key = st.text_input("새 Gemini API 키 입력", type="password")
+        submitted = st.form_submit_button("➕ 키 추가하기", use_container_width=True)
+        
+        if submitted:
+            if new_key.strip():
+                key_clean = new_key.strip()
+                if key_clean not in st.session_state['api_keys']:
+                    st.session_state['api_keys'].append(key_clean)
+                    st.success("API 키가 추가되었습니다!")
+                else:
+                    st.warning("이미 등록된 API 키입니다.")
             else:
-                st.warning("이미 등록된 API 키입니다.")
-        else:
-            st.warning("키를 입력해 주세요.")
+                st.warning("키를 입력해 주세요.")
             
     st.markdown("---")
     
@@ -55,7 +55,6 @@ with st.sidebar:
         )
         current_api_key = key_options[selected_label]
         
-        # 삭제 버튼 (누르면 목록에서 영구 제거됨)
         if st.button("🗑️ 선택한 키 삭제", use_container_width=True):
             st.session_state['api_keys'].remove(current_api_key)
             st.success("선택한 API 키가 삭제되었습니다.")
@@ -64,7 +63,7 @@ with st.sidebar:
         genai.configure(api_key=current_api_key)
         st.success("✨ 활성화 완료")
     else:
-        st.info("💡 등록된 키가 없습니다. 위 입력창에 키를 추가해 주세요.")
+        st.info("💡 등록된 키가 없습니다. 위 입력창에 본인의 API 키를 추가해 주세요.")
         
     st.markdown("---")
     st.markdown("### 📌 이용 가이드")
@@ -84,7 +83,6 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
     with st.spinner("데이터베이스를 분석하여 7대 거장의 조건에 맞는 종목을 선별 중입니다..."):
         df = pd.read_csv("stock_data.csv")
         
-        # 7대 거장별 필터링 조건 (상위 50개씩 추출)
         strategies = {
             "📈 1. 워렌 버핏": df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5) & (df['ROE(%)'] >= 15)].head(50),
             "🛡️ 2. 벤자민 그레이엄": df[(df['PER'] > 0) & (df['PER'] <= 10) & (df['PBR'] > 0) & (df['PBR'] <= 0.8) & (df['시가총액(억)'] >= 1000)].head(50),
@@ -98,7 +96,6 @@ if st.button("🚀 7대 거장 상위 종목 리스트 불러오기", type="prim
             "💎 7. 켄 피셔": df[(df['시가총액(억)'] >= 500) & (df['시가총액(억)'] <= 2000) & (df['PBR'] > 0) & (df['PBR'] <= 1.0) & (df['PER'] > 0)].head(50)
         }
 
-        # 중복 종목 분석 로직
         stock_matches = {}
         for strat_name, res_df in strategies.items():
             for _, row in res_df.iterrows():
@@ -143,7 +140,6 @@ if st.session_state.get('loaded', False):
     
     st.markdown("---")
     
-    # 🔥 상단 특별 섹션: 거장들 간 중복 선택 종목 하이라이트
     st.markdown("### 🔥 [종합 추천] 2명 이상의 거장이 동시에 선택한 '중복 집중 공략' 종목")
     if overlap_df.empty:
         st.info("현재 2개 이상의 거장 조건에 동시에 겹치는 종목이 없습니다.")
@@ -182,7 +178,6 @@ if st.session_state.get('loaded', False):
                     use_container_width=True
                 )
                 
-                # 심층 상세보기 및 AI 리포트 영역
                 st.markdown("---")
                 st.markdown(f"#### 🤖 AI 종목 심층 분석 리포트")
                 
