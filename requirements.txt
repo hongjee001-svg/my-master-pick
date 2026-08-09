@@ -3,4 +3,3 @@ pykrx
 pandas
 numpy
 google-generativeai
-streamlit-localstorage
