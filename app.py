@@ -39,8 +39,8 @@ with st.sidebar:
                 key_clean = new_key.strip()
                 if key_clean not in st.session_state['api_keys']:
                     st.session_state['api_keys'].append(key_clean)
-                    # 브라우저 URL에 키를 동기화하여 새로고침 시에도 유지되도록 처리
-                    st.query_params.set_list("keys", st.session_state['api_keys'])
+                    # 브라우저 URL에 키를 동기화하여 새로고침 시에도 유지되도록 올바른 문법 적용
+                    st.query_params["keys"] = st.session_state['api_keys']
                     st.success("API 키가 추가되었습니다!")
                     st.rerun()
                 else:
@@ -67,7 +67,7 @@ with st.sidebar:
         if st.button("🗑️ 선택한 키 삭제", use_container_width=True):
             st.session_state['api_keys'].remove(current_api_key)
             if st.session_state['api_keys']:
-                st.query_params.set_list("keys", st.session_state['api_keys'])
+                st.query_params["keys"] = st.session_state['api_keys']
             else:
                 st.query_params.clear()
             st.success("선택한 API 키가 삭제되었습니다.")
