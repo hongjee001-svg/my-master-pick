@@ -146,7 +146,7 @@ if st.session_state.get('loaded', False):
                                 위 데이터를 바탕으로 이 종목이 왜 이 거장의 투자 철학에 부합하는지, 그리고 현재 한국 시장 상황에서 투자할 때 주의해야 할 점을 3문단으로 나누어 전문가처럼 친절하고 명확하게 요약해 주세요.
                                 """
                                 
-                                model = genai.GenerativeModel('gemini-1.5-flash')
+                                model = genai.GenerativeModel('gemini-3.6-flash')
                                 response = model.generate_content(prompt)
                                 
                                 st.success(f"✨ [{selected_stock}] AI 분석 리포트 완료")
