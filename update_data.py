@@ -6,12 +6,12 @@ import time
 
 def get_recent_bday(target_date):
     """특정 날짜 기준 가장 최근 주식시장 영업일을 찾습니다. (라이브러리 버그 우회 방식)"""
-    start = (target_date - relativedelta(days=10)).strftime("%Y%m%d")
-    end = target_date.strftime("%Y%m%d")
+    start_str = (target_date - relativedelta(days=10)).strftime("%Y%m%d")
+    end_str = target_date.strftime("%Y%m%d")
     
     try:
-        # 삼성전자(005930) 주가로 실제 장이 열린 마지막 날짜 추출
-        df = stock.get_market_ohlcv_by_ticker(start, end, "005930")
+        # ✅ 수정된 부분: 단일 종목의 기간 데이터를 불러오는 올바른 함수(get_market_ohlcv) 사용
+        df = stock.get_market_ohlcv(start_str, end_str, "005930")
         if not df.empty:
             return df.index[-1]
     except Exception:
@@ -44,7 +44,7 @@ else:
 # pykrx 라이브러리와의 호환성을 위해 시간대 정보(tz) 제거
 base_date = base_date.replace(tzinfo=None)
 
-# 2. 기준 날짜 계산
+# 2. 기준 날짜 계산 (주말이면 금요일로 자동 보정됨)
 date_t0 = get_recent_bday(base_date)
 date_1m = get_recent_bday(base_date - relativedelta(months=1))
 date_3m = get_recent_bday(base_date - relativedelta(months=3))
@@ -71,7 +71,7 @@ for mkt in markets:
     price_1m = pd.concat([price_1m, get_price_data(date_1m, mkt)])
     price_3m = pd.concat([price_3m, get_price_data(date_3m, mkt)])
     price_5m = pd.concat([price_5m, get_price_data(date_5m, mkt)])
-    time.sleep(1) 
+    time.sleep(1) # 서버 과부하 방지
 
 # 5. 데이터 병합 및 가공
 df_master = df_fund.copy()
