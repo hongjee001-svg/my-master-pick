@@ -1,0 +1,40 @@
+name: Auto Update Stock Data
+
+on:
+  schedule:
+    # 매주 월~금 한국시간 오후 6시 (UTC 기준 09:00)에 자동 실행
+    - cron: '0 9 * * 1-5'
+  workflow_dispatch: # 버튼을 눌러서 수동으로 즉시 실행할 수 있게 해주는 옵션
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. 저장소 코드 불러오기
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. 파이썬 환경 세팅
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    # 3. 필요한 패키지 설치 (requirements.txt 기준)
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 4. 데이터 수집 파이썬 스크립트 실행
+    - name: Run Python script
+      run: python update_data.py
+
+    # 5. 새로 갱신된 CSV 파일을 깃허브에 다시 저장(Commit & Push)
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add stock_data.csv
+        git diff --quiet && git diff --staged --quiet || (git commit -m "🔄 매일 주가 및 재무 데이터 자동 업데이트" && git push)
