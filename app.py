@@ -5,16 +5,25 @@ from dateutil.relativedelta import relativedelta
 import time
 
 def get_recent_bday(target_date):
-    """특정 날짜 기준 가장 최근 주식시장 영업일을 찾습니다."""
-    start = target_date - relativedelta(days=10)
-    # ❌ 에러 났던 부분 수정 완료 (get_business_days_dates -> get_business_days)
-    bdays = stock.get_business_days(start.strftime("%Y%m%d"), target_date.strftime("%Y%m%d"))
-    return bdays[-1] if len(bdays) > 0 else target_date
+    """특정 날짜 기준 가장 최근 주식시장 영업일을 찾습니다. (라이브러리 버그 우회 방식)"""
+    start = (target_date - relativedelta(days=10)).strftime("%Y%m%d")
+    end = target_date.strftime("%Y%m%d")
+    
+    # 삼성전자(005930)의 주가 데이터를 불러와서 장이 실제로 열렸던 마지막 날짜를 추출
+    try:
+        df = stock.get_market_ohlcv_by_ticker(start, end, "005930")
+        if not df.empty:
+            return df.index[-1]
+    except Exception:
+        pass
+    
+    return target_date
 
 def get_price_data(date, market):
     """특정 영업일의 종가 데이터를 가져옵니다."""
+    date_str = date.strftime("%Y%m%d")
     try:
-        df = stock.get_market_ohlcv_by_ticker(date, market=market)
+        df = stock.get_market_ohlcv_by_ticker(date_str, market=market)
         return df[['종가']]
     except Exception:
         return pd.DataFrame()
@@ -29,14 +38,16 @@ date_3m = get_recent_bday(today - relativedelta(months=3))
 date_5m = get_recent_bday(today - relativedelta(months=5))
 
 print(f"기준일: {date_t0.strftime('%Y-%m-%d')} (업데이트 진행 중...)")
+print(f"1개월전: {date_1m.strftime('%Y-%m-%d')}, 3개월전: {date_3m.strftime('%Y-%m-%d')}, 5개월전: {date_5m.strftime('%Y-%m-%d')}")
 
 # 2. 현재 기준 펀더멘털(PER, PBR, ROE, DIV) 및 시가총액 수집
-df_fund_kospi = stock.get_market_fundamental_by_ticker(date_t0, market="KOSPI")
-df_fund_kosdaq = stock.get_market_fundamental_by_ticker(date_t0, market="KOSDAQ")
+date_t0_str = date_t0.strftime("%Y%m%d")
+df_fund_kospi = stock.get_market_fundamental_by_ticker(date_t0_str, market="KOSPI")
+df_fund_kosdaq = stock.get_market_fundamental_by_ticker(date_t0_str, market="KOSDAQ")
 df_fund = pd.concat([df_fund_kospi, df_fund_kosdaq])
 
-df_cap_kospi = stock.get_market_cap_by_ticker(date_t0, market="KOSPI")
-df_cap_kosdaq = stock.get_market_cap_by_ticker(date_t0, market="KOSDAQ")
+df_cap_kospi = stock.get_market_cap_by_ticker(date_t0_str, market="KOSPI")
+df_cap_kosdaq = stock.get_market_cap_by_ticker(date_t0_str, market="KOSDAQ")
 df_cap = pd.concat([df_cap_kospi, df_cap_kosdaq])
 
 # 3. 과거 종가 수집 (모멘텀 계산용)
@@ -56,7 +67,7 @@ df_master['종목코드'] = df_master.index
 df_master['종목명'] = [stock.get_market_ticker_name(t) for t in df_master.index]
 df_master['시가총액(억)'] = df_cap['시가총액'] / 100000000
 
-# 수익률 계산 (NaN 방지를 위해 기본값 0 처리)
+# 수익률 계산 (NaN 방지를 위해 기본값 0 처리 및 인덱스 매칭)
 df_master['현재가'] = price_t0['종가']
 df_master['1개월전'] = price_1m['종가']
 df_master['3개월전'] = price_3m['종가']
