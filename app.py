@@ -66,7 +66,6 @@ strategies = {
 
 all_picks = pd.concat([res.assign(거장스타일=name) for name, res in strategies.items()]).drop_duplicates(subset=['종목코드'])
 
-# 사용자 요청 기준 적용: 소형주(1000억 이하), 중형주(1000억 초과 ~ 5000억 이하), 대형주(5000억 초과)
 col1, col2, col3 = st.columns(3)
 def draw_cap(title, cap_df, col):
     with col:
@@ -114,7 +113,9 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
             
         display_df = res_df[['종목명', '종목코드', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR']].head(30)
         display_df.index = range(1, len(display_df) + 1)
-        st.dataframe(display_df.round(2), use_container_width=True)
+        
+        # 스트림릿 최신 버전 경고 대응 (use_container_width -> width='stretch')
+        st.dataframe(display_df.round(2), width="stretch")
         
         col_ai1, col_ai2 = st.columns([2, 1])
         with col_ai1:
@@ -122,11 +123,11 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
         with col_ai2:
             st.write("")
             st.write("")
-            if st.button("✨ AI 투자 리포트 생성", key=f"btn_{i}", use_container_width=True):
+            if st.button("✨ AI 투자 리포트 생성", key=f"btn_{i}", width="stretch"):
                 if not saved_keys:
                     st.warning("왼쪽 사이드바에서 API 키를 먼저 추가해주세요.")
                 else:
-                    with st.spinner("AI가 재무와 모멘텀을 분석 중입니다..."):
+                    with st.spinner("Gemini Pro가 심층 분석을 진행 중입니다..."):
                         info = display_df[display_df['종목명'] == selected_stock].iloc[0]
                         prompt = f"""
                         전략: {strat_name}
@@ -137,8 +138,9 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
                         위 지표를 바탕으로 이 종목이 왜 이 투자 거장의 철학에 부합하는지, 그리고 현재 모멘텀 관점에서 매력도와 리스크를 3문단으로 요약해 줘.
                         """
                         try:
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            st.success(f"[{selected_stock}] 분석 완료")
+                            # Gemini Pro 모델로 전격 교체 완료!
+                            model = genai.GenerativeModel('gemini-1.5-pro')
+                            st.success(f"[{selected_stock}] Gemini Pro 분석 완료")
                             st.write(model.generate_content(prompt).text)
                         except Exception as e:
-                            st.error(f"오류: {e}")
+                            st.error(f"오류가 발생했습니다: {e}")
