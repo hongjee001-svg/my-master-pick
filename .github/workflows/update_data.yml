@@ -29,7 +29,9 @@ jobs:
         KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
       run: python update_data.py
 
-    - name: Commit and Push
+ - name: Commit and Push
+      # 수동 실행일 때만 커밋하게 설정해서, 매일 자동 실행 시의 재빌드 방지
+      if: github.event_name == 'workflow_dispatch' 
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
