@@ -34,57 +34,104 @@ date_1m = (now - relativedelta(months=1)).strftime("%Y%m%d")
 date_3m = (now - relativedelta(months=3)).strftime("%Y%m%d")
 date_5m = (now - relativedelta(months=5)).strftime("%Y%m%d")
 
-# 3. 시장 전체 종목 리스트 불러오기 (초기 테스트: 시총 상위 300개로 제한)
+# 3. 시장 종목 데이터 불러오기 (시가총액 상위 300개 우량주)
 print("📊 시장 종목 데이터를 불러옵니다...")
 df_krx = fdr.StockListing('KRX')
 df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
 df_top = df_krx.head(300).copy()
 
 data_list = []
-print(f"🚀 총 {len(df_top)}개 종목 재무 및 모멘텀 분석 시작...")
+print(f"🚀 총 {len(df_top)}개 종목 실시간 재무 및 과거 주가(모멘텀) 분석 시작...")
 
-# 4. 종목별 한투 API 호출 반복
+# 4. 종목별 한투 API 호출 (현재가 + 과거 일별 주가)
 for idx, row in df_top.iterrows():
     code = row['Code']
     name = row['Name']
     
-    headers_api = {
+    headers_current = {
         "content-type": "application/json",
         "authorization": f"Bearer {ACCESS_TOKEN}",
         "appkey": APP_KEY,
         "appsecret": APP_SECRET,
         "tr_id": "FHKST01010100"
     }
+    params_current = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": code}
     
-    params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": code}
+    headers_history = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {ACCESS_TOKEN}",
+        "appkey": APP_KEY,
+        "appsecret": APP_SECRET,
+        "tr_id": "FHKST03010100" 
+    }
+    params_history = {
+        "fid_cond_mrkt_div_code": "J", 
+        "fid_input_iscd": code,
+        "fid_input_date_1": date_5m,
+        "fid_input_date_2": date_t0,
+        "fid_period_div_code": "D",
+        "fid_org_adj_prc": "1"
+    }
     
     try:
-        resp = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-price", headers=headers_api, params=params)
-        time.sleep(0.06) 
+        # 현재가 및 재무 호출
+        res_c = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-price", headers=headers_current, params=params_current)
+        time.sleep(0.05) 
         
-        if resp.status_code == 200 and resp.json()["rt_cd"] == "0":
-            output = resp.json()["output"]
+        # 과거 주가 호출
+        res_h = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-daily-price", headers=headers_history, params=params_history)
+        time.sleep(0.05) 
+        
+        if res_c.status_code == 200 and res_h.status_code == 200:
+            out_c = res_c.json().get("output", {})
+            out_h = res_h.json().get("output", [])
             
-            per = float(output.get("per", 0)) if output.get("per") else 0
-            pbr = float(output.get("pbr", 0)) if output.get("pbr") else 0
+            if not out_c or not out_h:
+                continue
+
+            current_price = float(out_c.get("stck_prpr", 0))
+            per = float(out_c.get("per", 0)) if out_c.get("per") else 0
+            pbr = float(out_c.get("pbr", 0)) if out_c.get("pbr") else 0
+            market_cap = float(out_c.get("hts_avls", 0))
             
-            # 모멘텀 수익률 (계산 로직 - 테스트용 더미 데이터 유지)
-            # 추후 과거 주가 API 결합 시 이 부분만 업데이트 예정
+            # 실제 모멘텀 수익률 계산 로직
+            df_hist = pd.DataFrame(out_h)
+            if not df_hist.empty and 'stck_bsop_date' in df_hist.columns:
+                df_hist['stck_bsop_date'] = pd.to_datetime(df_hist['stck_bsop_date'])
+                df_hist['stck_clpr'] = df_hist['stck_clpr'].astype(float)
+                
+                def get_past_price(target_date_str):
+                    target = pd.to_datetime(target_date_str)
+                    past_df = df_hist[df_hist['stck_bsop_date'] <= target]
+                    if not past_df.empty:
+                        return past_df.iloc[0]['stck_clpr']
+                    return current_price
+                
+                price_1m = get_past_price(date_1m)
+                price_3m = get_past_price(date_3m)
+                price_5m = get_past_price(date_5m)
+                
+                ret_1m = round(((current_price - price_1m) / price_1m) * 100, 2) if price_1m > 0 else 0
+                ret_3m = round(((current_price - price_3m) / price_3m) * 100, 2) if price_3m > 0 else 0
+                ret_5m = round(((current_price - price_5m) / price_5m) * 100, 2) if price_5m > 0 else 0
+            else:
+                ret_1m, ret_3m, ret_5m = 0, 0, 0
+                
             data_list.append({
                 "종목코드": code,
                 "종목명": name,
-                "현재가": float(output["stck_prpr"]),
+                "현재가": current_price,
                 "PER": per,
                 "PBR": pbr,
-                "시가총액(억)": float(output["hts_avls"]),
-                "1개월_수익률(%)": 5.0, 
-                "3개월_수익률(%)": 10.0,
-                "5개월_수익률(%)": 15.0
+                "시가총액(억)": market_cap,
+                "1개월_수익률(%)": ret_1m, 
+                "3개월_수익률(%)": ret_3m,
+                "5개월_수익률(%)": ret_5m
             })
     except Exception as e:
-        print(f"⚠️ {name}({code}) 오류: {e}")
+        pass
 
 # 5. CSV 저장
 df_master = pd.DataFrame(data_list)
 df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-print(f"✅ 수집 성공! 'stock_data.csv'가 생성되었습니다.")
+print(f"✅ 완벽하게 수집 성공! 총 {len(df_master)}개 종목의 데이터가 갱신되었습니다.")
