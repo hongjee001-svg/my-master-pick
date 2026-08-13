@@ -66,6 +66,7 @@ strategies = {
 
 all_picks = pd.concat([res.assign(거장스타일=name) for name, res in strategies.items()]).drop_duplicates(subset=['종목코드'])
 
+# 사용자 요청 기준 적용: 소형주(1000억 이하), 중형주(1000억 초과 ~ 5000억 이하), 대형주(5000억 초과)
 col1, col2, col3 = st.columns(3)
 def draw_cap(title, cap_df, col):
     with col:
@@ -75,11 +76,11 @@ def draw_cap(title, cap_df, col):
             icon, name = top['거장스타일'].split(' ', 1)
             st.markdown(f"<div class='cap-box'><div class='cap-icon'>{icon}</div><div class='cap-style'>{name}</div><div class='cap-name'>{top['종목명']}</div><div class='cap-return'>+{top['1개월_수익률(%)']}%</div></div>", unsafe_allow_html=True)
         else:
-            st.info("데이터 없음")
+            st.info("조건에 맞는 종목 없음")
 
-draw_cap("소형주", all_picks[all_picks['시가총액(억)'] < 1000], col1)
-draw_cap("중소형주", all_picks[(all_picks['시가총액(억)'] >= 1000) & (all_picks['시가총액(억)'] < 5000)], col2)
-draw_cap("중대형주", all_picks[all_picks['시가총액(억)'] >= 5000], col3)
+draw_cap("소형주 (1,000억 이하)", all_picks[all_picks['시가총액(억)'] <= 1000], col1)
+draw_cap("중형주 (1,000억~5,000억)", all_picks[(all_picks['시가총액(억)'] > 1000) & (all_picks['시가총액(억)'] <= 5000)], col2)
+draw_cap("대형주 (5,000억 초과)", all_picks[all_picks['시가총액(억)'] > 5000], col3)
 
 def draw_top10(period_col):
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
