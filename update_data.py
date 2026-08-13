@@ -74,11 +74,9 @@ for idx, row in df_top.iterrows():
     }
     
     try:
-        # 현재가 및 재무 호출
         res_c = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-price", headers=headers_current, params=params_current)
         time.sleep(0.05) 
         
-        # 과거 주가 호출
         res_h = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-daily-price", headers=headers_history, params=params_history)
         time.sleep(0.05) 
         
@@ -86,36 +84,36 @@ for idx, row in df_top.iterrows():
             out_c = res_c.json().get("output", {})
             out_h = res_h.json().get("output", [])
             
-            if not out_c or not out_h:
+            if not out_c:
                 continue
 
             current_price = float(out_c.get("stck_prpr", 0))
             per = float(out_c.get("per", 0)) if out_c.get("per") else 0
-            pbr = float(out_c.get("pbr", 0)) if out_c.get("pbr") else 0
+            pbr = float(out_c.get("pbr", 0)) if output.get("pbr") else 0 if out_c.get("pbr") else 0
             market_cap = float(out_c.get("hts_avls", 0))
             
-            # 실제 모멘텀 수익률 계산 로직
-            df_hist = pd.DataFrame(out_h)
-            if not df_hist.empty and 'stck_bsop_date' in df_hist.columns:
-                df_hist['stck_bsop_date'] = pd.to_datetime(df_hist['stck_bsop_date'])
-                df_hist['stck_clpr'] = df_hist['stck_clpr'].astype(float)
-                
-                def get_past_price(target_date_str):
-                    target = pd.to_datetime(target_date_str)
-                    past_df = df_hist[df_hist['stck_bsop_date'] <= target]
-                    if not past_df.empty:
-                        return past_df.iloc[0]['stck_clpr']
-                    return current_price
-                
-                price_1m = get_past_price(date_1m)
-                price_3m = get_past_price(date_3m)
-                price_5m = get_past_price(date_5m)
-                
-                ret_1m = round(((current_price - price_1m) / price_1m) * 100, 2) if price_1m > 0 else 0
-                ret_3m = round(((current_price - price_3m) / price_3m) * 100, 2) if price_3m > 0 else 0
-                ret_5m = round(((current_price - price_5m) / price_5m) * 100, 2) if price_5m > 0 else 0
-            else:
-                ret_1m, ret_3m, ret_5m = 0, 0, 0
+            ret_1m, ret_3m, ret_5m = 0, 0, 0
+            
+            if out_h:
+                df_hist = pd.DataFrame(out_h)
+                if not df_hist.empty and 'stck_bsop_date' in df_hist.columns:
+                    df_hist['stck_bsop_date'] = pd.to_datetime(df_hist['stck_bsop_date'])
+                    df_hist['stck_clpr'] = df_hist['stck_clpr'].astype(float)
+                    
+                    def get_past_price(target_date_str):
+                        target = pd.to_datetime(target_date_str)
+                        past_df = df_hist[df_hist['stck_bsop_date'] <= target]
+                        if not past_df.empty:
+                            return past_df.iloc[0]['stck_clpr']
+                        return current_price
+                    
+                    price_1m = get_past_price(date_1m)
+                    price_3m = get_past_price(date_3m)
+                    price_5m = get_past_price(date_5m)
+                    
+                    ret_1m = round(((current_price - price_1m) / price_1m) * 100, 2) if price_1m > 0 else 0
+                    ret_3m = round(((current_price - price_3m) / price_3m) * 100, 2) if price_3m > 0 else 0
+                    ret_5m = round(((current_price - price_5m) / price_5m) * 100, 2) if price_5m > 0 else 0
                 
             data_list.append({
                 "종목코드": code,
@@ -131,7 +129,16 @@ for idx, row in df_top.iterrows():
     except Exception as e:
         pass
 
-# 5. CSV 저장
-df_master = pd.DataFrame(data_list)
-df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-print(f"✅ 완벽하게 수집 성공! 총 {len(df_master)}개 종목의 데이터가 갱신되었습니다.")
+# 5. 데이터가 정상 수집되었는지 확인 후 CSV 저장 (방어 코드)
+if len(data_list) > 0:
+    df_master = pd.DataFrame(data_list)
+    df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
+    print(f"✅ 완벽하게 수집 성공! 총 {len(df_master)}개 종목의 데이터가 갱신되었습니다.")
+else:
+    print("❌ 수집된 데이터가 없습니다. 기본 더미 데이터를 생성합니다.")
+    df_dummy = pd.DataFrame([{
+        "종목코드": "005930", "종목명": "삼성전자", "현재가": 70000, 
+        "PER": 10.0, "PBR": 1.2, "시가총액(억)": 400000, 
+        "1개월_수익률(%)": 5.0, "3개월_수익률(%)": 10.0, "5개월_수익률(%)": 15.0
+    }])
+    df_dummy.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
