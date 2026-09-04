@@ -7,22 +7,28 @@ import FinanceDataReader as fdr
 from pykrx import stock
 
 print("📊 시장 전체 종목 데이터를 초고속(Bulk)으로 수집합니다...")
-# (주의) KRX 로그인 실패 경고는 공개 데이터 수집에 영향이 없으므로 무시하셔도 됩니다.
+# (주의) KRX 로그인 실패 경고는 기관용 유료 기능 관련 알림이므로 공개 데이터 수집엔 무시하셔도 됩니다.
 
 now = datetime.now()
 
-# 한국 시장 휴장일을 피해 가장 가까운 평일(영업일)을 찾아주는 함수
+# 한국 시장 휴장일을 피해 가장 가까운 평일(영업일)을 찾아주는 함수 (최신 pykrx API 완벽 적용)
 def get_closest_bizday(target_date):
-    start_str = (target_date - relativedelta(days=14)).strftime("%Y%m%d")
-    end_str = target_date.strftime("%Y%m%d")
-    
-    # 💡 요기가 수정된 부분입니다! (_dates 꼬리표 제거)
-    biz_days = stock.get_business_days(start_str, end_str)
-    
-    if len(biz_days) == 0:
+    try:
+        # 1. 새 규칙에 맞게 날짜 글자가 아닌 연(year), 월(month)을 숫자로 쪼개서 넣습니다.
+        biz_days = stock.get_previous_business_days(year=target_date.year, month=target_date.month)
+        
+        # 2. 이번 달 영업일 목록 중 타겟 날짜 이전인 것만 골라냅니다.
+        past_days = [d for d in biz_days if d.date() <= target_date.date()]
+        if past_days:
+            return past_days[-1].strftime("%Y%m%d")
+        
+        # 3. 혹시 월초(ex: 1일이 일요일)라서 이번 달 영업일이 안 잡히면, 지난달 마지막 영업일로 넘어갑니다.
+        prev_month = target_date - relativedelta(months=1)
+        biz_days_prev = stock.get_previous_business_days(year=prev_month.year, month=prev_month.month)
+        return biz_days_prev[-1].strftime("%Y%m%d")
+    except Exception as e:
+        # 만약 실패해도 멈추지 않고 안전하게 기본 날짜 반환
         return target_date.strftime("%Y%m%d")
-    
-    return biz_days[-1].strftime("%Y%m%d")
 
 date_t0 = get_closest_bizday(now)
 date_1m = get_closest_bizday(now - relativedelta(months=1))
@@ -43,7 +49,7 @@ df_p1 = stock.get_market_ohlcv(date_1m, market="ALL")
 df_p3 = stock.get_market_ohlcv(date_3m, market="ALL")
 df_p5 = stock.get_market_ohlcv(date_5m, market="ALL")
 
-# 💡 핵심 추가: 오늘 날짜 기준 진짜 PER, PBR, 시가총액 통째로 불러오기
+# 💡 핵심: 오늘 날짜 기준 진짜 PER, PBR, 시가총액 통째로 불러오기
 df_fund = stock.get_market_fundamental(date_t0, market="ALL")
 df_cap = stock.get_market_cap(date_t0, market="ALL")
 
