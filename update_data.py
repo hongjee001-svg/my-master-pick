@@ -32,13 +32,17 @@ print(f"기준일: {date_t0}, 1개월전: {date_1m}, 3개월전: {date_3m}, 5개
 df_krx = fdr.StockListing('KRX')
 df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
 
-print("🚀 과거 주가 데이터를 한 번에 가져옵니다... (약 15초 소요)")
+print("🚀 주가, 시가총액, PER, PBR 데이터를 한 방에 가져옵니다...")
 
-# 2. pykrx를 이용해 특정 날짜의 전종목 주가를 한 방에 통째로 가져오기
+# 2. pykrx를 이용해 전종목 주가 및 펀더멘털 통째로 가져오기 (429 에러 완벽 방어)
 df_p0 = stock.get_market_ohlcv(date_t0, market="ALL")
 df_p1 = stock.get_market_ohlcv(date_1m, market="ALL")
 df_p3 = stock.get_market_ohlcv(date_3m, market="ALL")
 df_p5 = stock.get_market_ohlcv(date_5m, market="ALL")
+
+# 💡 핵심 추가: 오늘 날짜 기준 진짜 PER, PBR, 시가총액 통째로 불러오기
+df_fund = stock.get_market_fundamental(date_t0, market="ALL")
+df_cap = stock.get_market_cap(date_t0, market="ALL")
 
 data_list = []
 
@@ -48,7 +52,8 @@ for idx, row in df_krx.iterrows():
     name = row['Name']
     
     try:
-        if code not in df_p0.index:
+        # 주가나 펀더멘털 데이터가 없으면 패스
+        if code not in df_p0.index or code not in df_fund.index or code not in df_cap.index:
             continue
             
         current_price = float(df_p0.loc[code, '종가'])
@@ -63,17 +68,18 @@ for idx, row in df_krx.iterrows():
         ret_3m = round(((current_price - price_3m) / price_3m) * 100, 2)
         ret_5m = round(((current_price - price_5m) / price_5m) * 100, 2)
         
-        market_cap = float(row.get('Marcap', 50000000000) / 100000000) if pd.notna(row.get('Marcap')) else 1000
-        per = float(row.get('PER', 12.5)) if pd.notna(row.get('PER')) else 12.5
-        pbr = float(row.get('PBR', 1.1)) if pd.notna(row.get('PBR')) else 1.1
+        # 가짜 값이 아닌 pykrx에서 가져온 진짜 데이터 연결
+        real_marcap = float(df_cap.loc[code, '시가총액']) / 100000000  # 억 원 단위
+        real_per = float(df_fund.loc[code, 'PER'])
+        real_pbr = float(df_fund.loc[code, 'PBR'])
         
         data_list.append({
             "종목코드": code,
             "종목명": name,
             "현재가": current_price,
-            "PER": per if per > 0 else 10.0,
-            "PBR": pbr if pbr > 0 else 1.0,
-            "시가총액(억)": market_cap,
+            "PER": real_per if pd.notna(real_per) and real_per > 0 else 0,
+            "PBR": real_pbr if pd.notna(real_pbr) and real_pbr > 0 else 0,
+            "시가총액(억)": round(real_marcap, 2),
             "1개월_수익률(%)": ret_1m, 
             "3개월_수익률(%)": ret_3m,
             "5개월_수익률(%)": ret_5m
