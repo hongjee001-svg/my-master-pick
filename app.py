@@ -96,10 +96,21 @@ def draw_top10(period_col):
 
 st.markdown("---")
 st.markdown("### 🔥 Best 상승률 Top 10")
-tab1, tab3, tab5 = st.tabs(["1개월", "3개월", "5개월"])
-with tab1: draw_top10("1개월_수익률(%)")
-with tab3: draw_top10("3개월_수익률(%)")
-with tab5: draw_top10("5개월_수익률(%)")
+
+# 💡 탭(st.tabs)을 지우고 가로 3분할(st.columns)로 완벽하게 교체한 부분입니다.
+col_1m, col_3m, col_5m = st.columns(3)
+
+with col_1m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("1개월_수익률(%)")
+
+with col_3m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("3개월_수익률(%)")
+
+with col_5m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>5개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("5개월_수익률(%)")
 
 st.markdown("---")
 st.markdown("### 🔍 7대 거장별 전체 리스트 및 AI 분석")
@@ -138,7 +149,7 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
                         위 지표를 바탕으로 이 종목이 왜 이 투자 거장의 철학에 부합하는지, 그리고 현재 모멘텀 관점에서 매력도와 리스크를 3문단으로 요약해 줘.
                         """
                         try:
-                            # Gemini Pro 모델로 전격 교체 완료!
+                            # Gemini Pro 모델
                             model = genai.GenerativeModel('gemini-1.5-pro')
                             st.success(f"[{selected_stock}] Gemini Pro 분석 완료")
                             st.write(model.generate_content(prompt).text)
