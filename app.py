@@ -53,7 +53,6 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 7대 거장 투자 전략 정의 (상위 20개 핵심 종목 선별)
 strategies = {
     "👴 워런 버핏": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
     "👨‍🦳 피터 린치": df[df['PBR'] > 0].sort_values('PBR', ascending=True).head(20),
@@ -99,7 +98,6 @@ def draw_top10(period_col):
 st.markdown("---")
 st.markdown("### 🔥 Best 상승률 Top 10")
 
-# 가로 3분할 화면 배치
 col_1m, col_3m, col_5m = st.columns(3)
 
 with col_1m:
