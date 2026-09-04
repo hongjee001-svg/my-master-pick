@@ -11,18 +11,17 @@ print("📊 시장 전체 종목 데이터를 초고속(Bulk)으로 수집합니
 
 now = datetime.now()
 
-# 한국 시장 휴장일을 피해 가장 가까운 평일(영업일)을 찾아주는 함수 (pykrx 공식 API로 수정 완료!)
+# 한국 시장 휴장일을 피해 가장 가까운 평일(영업일)을 찾아주는 함수
 def get_closest_bizday(target_date):
-    # 타겟 날짜 기준 14일 전부터 타겟 날짜까지의 영업일 목록을 싹 가져옵니다.
     start_str = (target_date - relativedelta(days=14)).strftime("%Y%m%d")
     end_str = target_date.strftime("%Y%m%d")
     
-    biz_days = stock.get_business_days_dates(start_str, end_str)
+    # 💡 요기가 수정된 부분입니다! (_dates 꼬리표 제거)
+    biz_days = stock.get_business_days(start_str, end_str)
     
     if len(biz_days) == 0:
         return target_date.strftime("%Y%m%d")
     
-    # 목록 중 가장 마지막 날짜(가장 가까운 영업일)를 반환합니다.
     return biz_days[-1].strftime("%Y%m%d")
 
 date_t0 = get_closest_bizday(now)
