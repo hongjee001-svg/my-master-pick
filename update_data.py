@@ -42,7 +42,6 @@ except Exception as e:
     print(f"❌ 인증 서버 연결 실패: {e}")
     exit(1)
 
-# KIS API 공통 헤더 구성
 api_headers = {
     "content-type": "application/json; charset=utf-8",
     "authorization": f"Bearer {ACCESS_TOKEN}",
@@ -52,7 +51,7 @@ api_headers = {
     "custtype": "P"
 }
 
-# 3. 과거 수익률 계산을 위한 영업일 계산 (KOSPI 달력 활용)
+# 3. 영업일 계산 (KOSPI 달력 활용)
 now = datetime.now()
 try:
     kospi_df = fdr.DataReader('KS11', now - relativedelta(months=6), now)
@@ -73,16 +72,18 @@ date_5m = get_bizday(now - relativedelta(months=5))
 
 print(f"🗓️ 수익률 기준일 산정 완료 (1개월:{date_1m}, 3개월:{date_3m}, 5개월:{date_5m})")
 
-# 4. 과거 주가 일괄 다운로드 (서버 차단 방지를 위해 요청당 3초 휴식)
-print("🚀 과거 주가 데이터를 일괄 수집합니다...")
+# 4. 과거 주가 일괄 다운로드 후 티커를 문자열 인덱스로 변환
 def get_historical_safe(date_str):
     try:
         time.sleep(3)
-        return stock.get_market_ohlcv(date_str, market="ALL")
+        df = stock.get_market_ohlcv(date_str, market="ALL")
+        df.index = df.index.astype(str)
+        return df
     except Exception as e:
-        print(f"⚠️ {date_str} 과거 데이터 수집 실패. 수익률 0%로 대체됩니다.")
+        print(f"⚠️ {date_str} 과거 데이터 수집 실패: {e}")
         return pd.DataFrame()
 
+print("🚀 과거 주가 데이터를 일괄 수집합니다...")
 df_p1 = get_historical_safe(date_1m)
 df_p3 = get_historical_safe(date_3m)
 df_p5 = get_historical_safe(date_5m)
@@ -95,7 +96,7 @@ print(f"🚀 총 {total_count}개 종목의 KIS API 실시간 재무 데이터 �
 
 data_list = []
 
-# 6. 종목별 시세 조회 및 수익률 병합 (초당 호출 제한 준수: 0.2초 딜레이)
+# 6. 종목별 시세 조회 및 수익률 계산
 for idx, row in df_krx.iterrows():
     code = str(row['Code'])
     name = row['Name']
@@ -123,15 +124,13 @@ for idx, row in df_krx.iterrows():
             if current_price == 0:
                 continue
 
-            # 과거 가격 추출 (데이터가 없으면 현재가와 동일하게 처리하여 수익률 0% 방어)
-            p1 = float(df_p1.loc[code, '종가']) if not df_p1.empty and code in df_p1.index else current_price
-            p3 = float(df_p3.loc[code, '종가']) if not df_p3.empty and code in df_p3.index else current_price
-            p5 = float(df_p5.loc[code, '종가']) if not df_p5.empty and code in df_p5.index else current_price
+            p1 = float(df_p1.loc[code, '종가']) if not df_p1.empty and code in df_p1.index and float(df_p1.loc[code, '종가']) > 0 else current_price
+            p3 = float(df_p3.loc[code, '종가']) if not df_p3.empty and code in df_p3.index and float(df_p3.loc[code, '종가']) > 0 else current_price
+            p5 = float(df_p5.loc[code, '종가']) if not df_p5.empty and code in df_p5.index and float(df_p5.loc[code, '종가']) > 0 else current_price
 
-            # 수익률 계산 (소수점 2자리)
-            ret_1m = round(((current_price - p1) / p1) * 100, 2) if p1 > 0 else 0
-            ret_3m = round(((current_price - p3) / p3) * 100, 2) if p3 > 0 else 0
-            ret_5m = round(((current_price - p5) / p5) * 100, 2) if p5 > 0 else 0
+            ret_1m = round(((current_price - p1) / p1) * 100, 2)
+            ret_3m = round(((current_price - p3) / p3) * 100, 2)
+            ret_5m = round(((current_price - p5) / p5) * 100, 2)
                 
             data_list.append({
                 "종목코드": code,
