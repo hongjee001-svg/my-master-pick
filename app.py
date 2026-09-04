@@ -53,7 +53,7 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 7대 거장 투자 전략 정의 (상위 20개 핵심 종목만 필터링하여 중복 쏠림 방지)
+# 7대 거장 투자 전략 정의 (상위 20개 핵심 종목 선별)
 strategies = {
     "👴 워런 버핏": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
     "👨‍🦳 피터 린치": df[df['PBR'] > 0].sort_values('PBR', ascending=True).head(20),
@@ -73,7 +73,9 @@ def draw_cap(title, cap_df, col):
         if not cap_df.empty:
             top = cap_df.sort_values('1개월_수익률(%)', ascending=False).iloc[0]
             icon, name = top['거장스타일'].split(' ', 1)
-            st.markdown(f"<div class='cap-box'><div class='cap-icon'>{icon}</div><div class='cap-style'>{name}</div><div class='cap-name'>{top['종목명']}</div><div class='cap-return'>+{top['1개월_수익률(%)']}%</div></div>", unsafe_allow_html=True)
+            ret_val = top['1개월_수익률(%)']
+            sign = "+" if ret_val > 0 else ""
+            st.markdown(f"<div class='cap-box'><div class='cap-icon'>{icon}</div><div class='cap-style'>{name}</div><div class='cap-name'>{top['종목명']}</div><div class='cap-return'>{sign}{ret_val}%</div></div>", unsafe_allow_html=True)
         else:
             st.info("조건에 맞는 종목 없음")
 
@@ -97,7 +99,7 @@ def draw_top10(period_col):
 st.markdown("---")
 st.markdown("### 🔥 Best 상승률 Top 10")
 
-# 💡 탭(st.tabs)을 지우고 가로 3분할(st.columns)로 완벽하게 교체한 부분입니다.
+# 가로 3분할 화면 배치
 col_1m, col_3m, col_5m = st.columns(3)
 
 with col_1m:
@@ -125,7 +127,6 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
         display_df = res_df[['종목명', '종목코드', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR']].head(30)
         display_df.index = range(1, len(display_df) + 1)
         
-        # 스트림릿 최신 버전 경고 대응 (use_container_width -> width='stretch')
         st.dataframe(display_df.round(2), width="stretch")
         
         col_ai1, col_ai2 = st.columns([2, 1])
@@ -149,7 +150,6 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
                         위 지표를 바탕으로 이 종목이 왜 이 투자 거장의 철학에 부합하는지, 그리고 현재 모멘텀 관점에서 매력도와 리스크를 3문단으로 요약해 줘.
                         """
                         try:
-                            # Gemini Pro 모델
                             model = genai.GenerativeModel('gemini-1.5-pro')
                             st.success(f"[{selected_stock}] Gemini Pro 분석 완료")
                             st.write(model.generate_content(prompt).text)
