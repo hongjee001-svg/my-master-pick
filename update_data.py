@@ -7,9 +7,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import FinanceDataReader as fdr
 
-print("📊 KIS API(실시간 재무) + Fdr(과거 주가) 안정형 하이브리드 수집을 시작합니다...")
+print("📊 KIS API(실시간 재무) + 안전한 Fdr 수익률 수집을 시작합니다...")
 
-# 1. GitHub Secrets 환경 변수 로드
 APP_KEY = os.environ.get("KIS_APP_KEY")
 APP_SECRET = os.environ.get("KIS_APP_SECRET")
 URL_BASE = "https://openapi.koreainvestment.com:9443"
@@ -18,7 +17,6 @@ if not APP_KEY or not APP_SECRET:
     print("❌ 오류: KIS_APP_KEY 또는 KIS_APP_SECRET 환경 변수가 설정되지 않았습니다.")
     exit(1)
 
-# 2. 접근 토큰(Access Token) 발급
 token_headers = {"content-type": "application/json"}
 token_body = {
     "grant_type": "client_credentials",
@@ -50,7 +48,6 @@ api_headers = {
     "custtype": "P"
 }
 
-# 3. 전체 종목 기본 리스트 추출
 df_krx = fdr.StockListing('KRX')
 df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
 total_count = len(df_krx)
@@ -58,10 +55,14 @@ print(f"🚀 총 {total_count}개 종목의 데이터 수집을 시작합니다.
 
 data_list = []
 now = datetime.now()
-date_1m_target = now - relativedelta(months=1)
-date_3m_target = now - relativedelta(months=3)
 
-# 4. 종목별 시세 조회 및 수익률 계산 (Fdr을 통한 안전한 과거 주가 조회 포함)
+# 시장 전체 지수(KOSPI)를 통해 최근 3개월치 데이터 미리 확보 (개별 종목 부하 방지)
+print("📈 시장 기준 데이터 수집 중...")
+try:
+    kospi_hist = fdr.DataReader('KS11', now - relativedelta(months=4), now)
+except Exception:
+    kospi_hist = pd.DataFrame()
+
 for idx, row in df_krx.iterrows():
     code = str(row['Code'])
     name = row['Name']
@@ -88,23 +89,20 @@ for idx, row in df_krx.iterrows():
             current_price = float(output.get('stck_prpr') or 0)
             per = float(output.get('per') or 0)
             pbr = float(output.get('pbr') or 0)
-            marcap = float(output.get('hts_avls') or 0) / 100  # 억 단위 변환
+            marcap = float(output.get('hts_avls') or 0) / 100 
             
         if current_price == 0:
             current_price = float(row.get('Close') or 0)
             if current_price == 0:
                 continue
 
-        # 과거 주가 조회 (FinanceDataReader 활용)
         ret_1m, ret_3m, ret_5m = 0.0, 0.0, 0.0
         try:
-            hist = fdr.DataReader(code, now - relativedelta(months=4), now)
-            if not hist.empty and len(hist) > 20:
+            hist = fdr.DataReader(code, now - relativedelta(months=3), now)
+            if not hist.empty and len(hist) > 5:
                 p_current = hist['Close'].iloc[-1]
-                # 1개월 전 (~20거래일 전)
                 p_1m = hist['Close'].iloc[-20] if len(hist) >= 20 else hist['Close'].iloc[0]
-                # 3개월 전 (~60거래일 전)
-                p_3m = hist['Close'].iloc[-60] if len(hist) >= 60 else hist['Close'].iloc[0]
+                p_3m = hist['Close'].iloc[0]
                 
                 ret_1m = round(((p_current - p_1m) / p_1m) * 100, 2)
                 ret_3m = round(((p_current - p_3m) / p_3m) * 100, 2)
@@ -129,7 +127,6 @@ for idx, row in df_krx.iterrows():
     except Exception as e:
         continue
 
-# 5. CSV 저장
 if data_list:
     df_master = pd.DataFrame(data_list)
     df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
