@@ -2,8 +2,11 @@ name: Auto Update Stock Data
 
 on:
   schedule:
-    - cron: '0 8 * * 1-5'
-  workflow_dispatch:
+    - cron: '0 8 * * 1-5'  # 월~금 한국 시간 기준 17시(장 마감 후) 실행
+  workflow_dispatch:        # 수동 실행 버튼 활성화
+
+permissions:
+  contents: write           # CSV 업데이트 후 GitHub에 Push할 수 있는 권한 부여
 
 jobs:
   build:
@@ -20,9 +23,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy finance-datareader pykrx
+          pip install pandas numpy requests finance-datareader
 
       - name: Run update script
+        env:
+          # 💡 이곳이 핵심입니다! GitHub Secrets에 저장된 키를 파이썬으로 넘겨주는 다리 역할
+          KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+          KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
         run: python update_data.py
 
       - name: Commit and push changes
@@ -30,5 +37,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add stock_data.csv
-          git commit -m "Auto-update stock data" || echo "No changes to commit"
+          git commit -m "Auto-update stock data via KIS API" || echo "No changes to commit"
           git push
