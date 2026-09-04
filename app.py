@@ -53,15 +53,15 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 7대 거장 투자 전략 정의
+# 7대 거장 투자 전략 정의 (상위 20개 핵심 종목만 필터링하여 중복 쏠림 방지)
 strategies = {
-    "👴 워런 버핏": df[df['PER'] > 0].sort_values('PER', ascending=True),
-    "👨‍🦳 피터 린치": df[df['PBR'] > 0].sort_values('PBR', ascending=True),
-    "💎 켄 피셔": df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False),
-    "📚 벤저민 그레이엄": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values(['PER', 'PBR'], ascending=True),
-    "🎯 존 네프": df[df['PER'] > 0].sort_values('PER', ascending=True),
-    "🚀 윌리엄 오닐": df.sort_values('1개월_수익률(%)', ascending=False),
-    "🧙‍♂️ 조엘 그린블랫": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values('PER', ascending=True)
+    "👴 워런 버핏": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
+    "👨‍🦳 피터 린치": df[df['PBR'] > 0].sort_values('PBR', ascending=True).head(20),
+    "💎 켄 피셔": df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False).head(20),
+    "📚 벤저민 그레이엄": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values(['PER', 'PBR'], ascending=True).head(20),
+    "🎯 존 네프": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
+    "🚀 윌리엄 오닐": df.sort_values('1개월_수익률(%)', ascending=False).head(20),
+    "🧙‍♂️ 조엘 그린블랫": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values('PER', ascending=True).head(20)
 }
 
 all_picks = pd.concat([res.assign(거장스타일=name) for name, res in strategies.items()]).drop_duplicates(subset=['종목코드'])
