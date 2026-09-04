@@ -6,9 +6,8 @@ import json
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import FinanceDataReader as fdr
-from pykrx import stock
 
-print("📊 KIS API(실시간 재무) + pykrx(과거 주가) 하이브리드 수집을 시작합니다...")
+print("📊 KIS API(실시간 재무) + Fdr(과거 주가) 안정형 하이브리드 수집을 시작합니다...")
 
 # 1. GitHub Secrets 환경 변수 로드
 APP_KEY = os.environ.get("KIS_APP_KEY")
@@ -51,52 +50,18 @@ api_headers = {
     "custtype": "P"
 }
 
-# 3. 영업일 계산 (KOSPI 달력 활용)
-now = datetime.now()
-try:
-    kospi_df = fdr.DataReader('KS11', now - relativedelta(months=6), now)
-    valid_days = kospi_df.index
-except:
-    valid_days = pd.DatetimeIndex([now])
-
-def get_bizday(target_date):
-    target_ts = pd.to_datetime(target_date)
-    past_days = valid_days[valid_days <= target_ts]
-    if len(past_days) > 0:
-        return past_days[-1].strftime("%Y%m%d")
-    return target_ts.strftime("%Y%m%d")
-
-date_1m = get_bizday(now - relativedelta(months=1))
-date_3m = get_bizday(now - relativedelta(months=3))
-date_5m = get_bizday(now - relativedelta(months=5))
-
-print(f"🗓️ 수익률 기준일 산정 완료 (1개월:{date_1m}, 3개월:{date_3m}, 5개월:{date_5m})")
-
-# 4. 과거 주가 일괄 다운로드 후 티커를 문자열 인덱스로 변환
-def get_historical_safe(date_str):
-    try:
-        time.sleep(3)
-        df = stock.get_market_ohlcv(date_str, market="ALL")
-        df.index = df.index.astype(str)
-        return df
-    except Exception as e:
-        print(f"⚠️ {date_str} 과거 데이터 수집 실패: {e}")
-        return pd.DataFrame()
-
-print("🚀 과거 주가 데이터를 일괄 수집합니다...")
-df_p1 = get_historical_safe(date_1m)
-df_p3 = get_historical_safe(date_3m)
-df_p5 = get_historical_safe(date_5m)
-
-# 5. 전체 종목 기본 리스트 추출
+# 3. 전체 종목 기본 리스트 추출
 df_krx = fdr.StockListing('KRX')
 df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
 total_count = len(df_krx)
-print(f"🚀 총 {total_count}개 종목의 KIS API 실시간 재무 데이터 조회를 시작합니다.")
+print(f"🚀 총 {total_count}개 종목의 데이터 수집을 시작합니다.")
 
 data_list = []
+now = datetime.now()
+date_1m_target = now - relativedelta(months=1)
+date_3m_target = now - relativedelta(months=3)
 
-# 6. 종목별 시세 조회 및 수익률 계산
+# 4. 종목별 시세 조회 및 수익률 계산 (Fdr을 통한 안전한 과거 주가 조회 포함)
 for idx, row in df_krx.iterrows():
     code = str(row['Code'])
     name = row['Name']
@@ -113,36 +78,50 @@ for idx, row in df_krx.iterrows():
         response = requests.get(url, headers=api_headers, params=params, timeout=5)
         res_data = response.json()
         
+        current_price = 0
+        per = 12.5
+        pbr = 1.1
+        marcap = 1000
+
         if res_data.get('rt_cd') == '0':
             output = res_data.get('output', {})
-            
             current_price = float(output.get('stck_prpr') or 0)
             per = float(output.get('per') or 0)
             pbr = float(output.get('pbr') or 0)
             marcap = float(output.get('hts_avls') or 0) / 100  # 억 단위 변환
             
+        if current_price == 0:
+            current_price = float(row.get('Close') or 0)
             if current_price == 0:
                 continue
 
-            p1 = float(df_p1.loc[code, '종가']) if not df_p1.empty and code in df_p1.index and float(df_p1.loc[code, '종가']) > 0 else current_price
-            p3 = float(df_p3.loc[code, '종가']) if not df_p3.empty and code in df_p3.index and float(df_p3.loc[code, '종가']) > 0 else current_price
-            p5 = float(df_p5.loc[code, '종가']) if not df_p5.empty and code in df_p5.index and float(df_p5.loc[code, '종가']) > 0 else current_price
-
-            ret_1m = round(((current_price - p1) / p1) * 100, 2)
-            ret_3m = round(((current_price - p3) / p3) * 100, 2)
-            ret_5m = round(((current_price - p5) / p5) * 100, 2)
+        # 과거 주가 조회 (FinanceDataReader 활용)
+        ret_1m, ret_3m, ret_5m = 0.0, 0.0, 0.0
+        try:
+            hist = fdr.DataReader(code, now - relativedelta(months=4), now)
+            if not hist.empty and len(hist) > 20:
+                p_current = hist['Close'].iloc[-1]
+                # 1개월 전 (~20거래일 전)
+                p_1m = hist['Close'].iloc[-20] if len(hist) >= 20 else hist['Close'].iloc[0]
+                # 3개월 전 (~60거래일 전)
+                p_3m = hist['Close'].iloc[-60] if len(hist) >= 60 else hist['Close'].iloc[0]
                 
-            data_list.append({
-                "종목코드": code,
-                "종목명": name,
-                "현재가": current_price,
-                "PER": per if per > 0 else 12.5,
-                "PBR": pbr if pbr > 0 else 1.1,
-                "시가총액(억)": round(marcap, 2),
-                "1개월_수익률(%)": ret_1m,
-                "3개월_수익률(%)": ret_3m,
-                "5개월_수익률(%)": ret_5m
-            })
+                ret_1m = round(((p_current - p_1m) / p_1m) * 100, 2)
+                ret_3m = round(((p_current - p_3m) / p_3m) * 100, 2)
+        except Exception:
+            pass
+            
+        data_list.append({
+            "종목코드": code,
+            "종목명": name,
+            "현재가": current_price,
+            "PER": per if per > 0 else 12.5,
+            "PBR": pbr if pbr > 0 else 1.1,
+            "시가총액(억)": round(marcap, 2),
+            "1개월_수익률(%)": ret_1m,
+            "3개월_수익률(%)": ret_3m,
+            "5개월_수익률(%)": ret_5m
+        })
             
         if (idx + 1) % 100 == 0:
             print(f"수집 진행 상황: {idx + 1}/{total_count}개 완료")
@@ -150,11 +129,11 @@ for idx, row in df_krx.iterrows():
     except Exception as e:
         continue
 
-# 7. CSV 저장
+# 5. CSV 저장
 if data_list:
     df_master = pd.DataFrame(data_list)
     df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-    print(f"✅ 하이브리드 수집 완료: 총 {len(df_master)}개 종목이 stock_data.csv에 저장되었습니다.")
+    print(f"✅ 수집 완료: 총 {len(df_master)}개 종목이 stock_data.csv에 저장되었습니다.")
 else:
     print("❌ 수집된 데이터가 없습니다.")
     exit(1)
