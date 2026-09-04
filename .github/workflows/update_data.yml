@@ -23,11 +23,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy requests finance-datareader
+          # 💡 pykrx가 다시 추가되었습니다!
+          pip install pandas numpy requests finance-datareader pykrx
 
       - name: Run update script
         env:
-          # 💡 이곳이 핵심입니다! GitHub Secrets에 저장된 키를 파이썬으로 넘겨주는 다리 역할
           KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
           KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
         run: python update_data.py
@@ -37,5 +37,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add stock_data.csv
-          git commit -m "Auto-update stock data via KIS API" || echo "No changes to commit"
+          git commit -m "Auto-update stock data via Hybrid API" || echo "No changes to commit"
           git push
