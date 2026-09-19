@@ -15,11 +15,15 @@ st.markdown("""
     .top10-name { font-size: 18px; font-weight: bold; color: #FFFFFF; margin-bottom: 2px;}
     .top10-desc { font-size: 12px; color: #8F95A2; }
     .top10-return { font-size: 20px; font-weight: bold; color: #FF4D4F; }
-    .cap-box { background-color: #1E2129; border-radius: 12px; padding: 25px 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .cap-icon { font-size: 50px; margin-bottom: 10px; }
-    .cap-style { color: #E0E2E7; font-size: 14px; margin-bottom: 5px; }
-    .cap-name { color: #FFFFFF; font-size: 20px; font-weight: bold; margin-bottom: 5px; }
-    .cap-return { color: #FF4D4F; font-size: 18px; font-weight: bold; }
+    
+    /* 상단 체급별 Top 3 리스트 전용 세련된 미니 카드 CSS */
+    .cap-box-small { background-color: #1E2129; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .cap-left { display: flex; align-items: center; }
+    .cap-icon-small { font-size: 32px; margin-right: 12px; }
+    .cap-info-small { text-align: left; }
+    .cap-style-small { color: #8F95A2; font-size: 11px; margin-bottom: 2px; }
+    .cap-name-small { color: #FFFFFF; font-size: 16px; font-weight: bold; }
+    .cap-return-small { font-size: 16px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,31 +57,23 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 💡 7대 거장 투자 전략 재정의 (철학별 완전 분리)
-
-# 1. 벤저민 그레이엄 (PER * PBR < 22.5 방어적 가치투자)
+# 7대 거장 투자 전략 정의
 graham_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(20)
 
-# 2. 존 네프 (저PER의 대명사 - 기존 단순 정렬 유지)
 neff_picks = df[df['PER'] > 0].sort_values('PER', ascending=True).head(20)
 
-# 3. 조엘 그린블랫 (마법공식 랭킹 합산)
 magic_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['PBR'].rank(ascending=True)
 greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(20)
 
-# 4. 워런 버핏 (적정 가치 내 우량 대형주 선호)
 buffett_picks = df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
 
-# 5. 피터 린치 (시가총액 5천억 이하 중소형 가치주)
 lynch_picks = df[(df['PBR'] > 0) & (df['시가총액(억)'] <= 5000)].sort_values('PBR', ascending=True).head(20)
 
-# 6. 켄 피셔 (압도적 대형 우량주)
 fisher_picks = df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False).head(20)
 
-# 7. 윌리엄 오닐 (CAN SLIM 모멘텀: 1개월 수익률 최고)
 oneil_picks = df.sort_values('1개월_수익률(%)', ascending=False).head(20)
 
 strategies = {
@@ -97,11 +93,26 @@ def draw_cap(title, cap_df, col):
     with col:
         st.markdown(f"<h4 style='text-align:center'>{title}</h4>", unsafe_allow_html=True)
         if not cap_df.empty:
-            top = cap_df.sort_values('1개월_수익률(%)', ascending=False).iloc[0]
-            icon, name = top['거장스타일'].split(' ', 1)
-            ret_val = top['1개월_수익률(%)']
-            sign = "+" if ret_val > 0 else ""
-            st.markdown(f"<div class='cap-box'><div class='cap-icon'>{icon}</div><div class='cap-style'>{name}</div><div class='cap-name'>{top['종목명']}</div><div class='cap-return'>{sign}{ret_val}%</div></div>", unsafe_allow_html=True)
+            # 💡 1개만 가져오던 것을 상위 3개(Top 3)로 변경
+            top_3 = cap_df.sort_values('1개월_수익률(%)', ascending=False).head(3)
+            for idx, row in top_3.iterrows():
+                icon, name = row['거장스타일'].split(' ', 1)
+                ret_val = row['1개월_수익률(%)']
+                color = "#FF4D4F" if ret_val >= 0 else "#4C84FF"
+                sign = "+" if ret_val > 0 else ""
+                
+                st.markdown(f"""
+                <div class='cap-box-small'>
+                    <div class='cap-left'>
+                        <div class='cap-icon-small'>{icon}</div>
+                        <div class='cap-info-small'>
+                            <div class='cap-style-small'>{name}</div>
+                            <div class='cap-name-small'>{row['종목명']}</div>
+                        </div>
+                    </div>
+                    <div class='cap-return-small' style='color:{color};'>{sign}{ret_val}%</div>
+                </div>
+                """, unsafe_allow_html=True)
         else:
             st.info("조건에 맞는 종목 없음")
 
