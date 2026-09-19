@@ -53,14 +53,41 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
+# 💡 7대 거장 투자 전략 재정의 (철학별 완전 분리)
+
+# 1. 벤저민 그레이엄 (PER * PBR < 22.5 방어적 가치투자)
+graham_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
+graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
+graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(20)
+
+# 2. 존 네프 (저PER의 대명사 - 기존 단순 정렬 유지)
+neff_picks = df[df['PER'] > 0].sort_values('PER', ascending=True).head(20)
+
+# 3. 조엘 그린블랫 (마법공식 랭킹 합산)
+magic_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
+magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['PBR'].rank(ascending=True)
+greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(20)
+
+# 4. 워런 버핏 (적정 가치 내 우량 대형주 선호)
+buffett_picks = df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
+
+# 5. 피터 린치 (시가총액 5천억 이하 중소형 가치주)
+lynch_picks = df[(df['PBR'] > 0) & (df['시가총액(억)'] <= 5000)].sort_values('PBR', ascending=True).head(20)
+
+# 6. 켄 피셔 (압도적 대형 우량주)
+fisher_picks = df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False).head(20)
+
+# 7. 윌리엄 오닐 (CAN SLIM 모멘텀: 1개월 수익률 최고)
+oneil_picks = df.sort_values('1개월_수익률(%)', ascending=False).head(20)
+
 strategies = {
-    "👴 워런 버핏": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
-    "👨‍🦳 피터 린치": df[df['PBR'] > 0].sort_values('PBR', ascending=True).head(20),
-    "💎 켄 피셔": df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False).head(20),
-    "📚 벤저민 그레이엄": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values(['PER', 'PBR'], ascending=True).head(20),
-    "🎯 존 네프": df[df['PER'] > 0].sort_values('PER', ascending=True).head(20),
-    "🚀 윌리엄 오닐": df.sort_values('1개월_수익률(%)', ascending=False).head(20),
-    "🧙‍♂️ 조엘 그린블랫": df[(df['PER'] > 0) & (df['PBR'] > 0)].sort_values('PER', ascending=True).head(20)
+    "👴 워런 버핏": buffett_picks,
+    "👨‍🦳 피터 린치": lynch_picks,
+    "💎 켄 피셔": fisher_picks,
+    "📚 벤저민 그레이엄": graham_picks,
+    "🎯 존 네프": neff_picks,
+    "🚀 윌리엄 오닐": oneil_picks,
+    "🧙‍♂️ 조엘 그린블랫": greenblatt_picks
 }
 
 all_picks = pd.concat([res.assign(거장스타일=name) for name, res in strategies.items()]).drop_duplicates(subset=['종목코드'])
