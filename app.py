@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너")
+st.title("👑 7대 거장 마스터픽 스크리너 (V3.0 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -56,40 +56,49 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 기초 위생 필터: 시가총액 500억 이상 & 흑자기업(PER > 0)만 대상으로 하여 잡주 필터링
-safe_df = df[(df['PER'] > 0) & (df['시가총액(억)'] >= 500)].copy()
+# 기초 위생 필터: 정상 흑자 기업(PER>0, PBR>0)만 통과
+safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 
-# 7대 거장 투자 전략 정의
-graham_df = safe_df[safe_df['PBR'] > 0].copy()
+# 💡 [V3.0 궁극의 거장 수식 적용]
+
+# 1. 벤저민 그레이엄: 철저한 안전마진 (PER*PBR <= 22.5) & 배당을 주는 기업(DIV > 0)
+graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5) & (safe_df['배당률(%)'] > 0)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
-graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(20)
+graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
 
-neff_picks = safe_df.sort_values('PER', ascending=True).head(20)
+# 2. 워런 버핏: 압도적 퀄리티 대형주 (ROE >= 15%, PER <= 15, 시총 1조 이상)
+buffett_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['PER'] <= 15) & (safe_df['시가총액(억)'] >= 10000)].sort_values('ROE(%)', ascending=False).head(30)
 
-magic_df = safe_df[safe_df['PBR'] > 0].copy()
-magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['PBR'].rank(ascending=True)
-greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(20)
+# 3. 필립 피셔: 탁월한 대형 성장주 (ROE >= 15%, 시총 1조 이상, 3개월 연속 우상향 모멘텀)
+fisher_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['시가총액(억)'] >= 10000) & (safe_df['3개월_수익률(%)'] > 0)].sort_values('3개월_수익률(%)', ascending=False).head(30)
 
-buffett_picks = safe_df[(safe_df['PER'] <= 15) & (safe_df['PBR'] > 0) & (safe_df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
+# 4. 존 네프: 역발상 배당 가치주 (PER 5~10 사이 소외주 중 배당수익률 2% 이상)
+neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 10) & (safe_df['배당률(%)'] >= 2.0)].sort_values('배당률(%)', ascending=False).head(30)
 
-# 피터 린치 전략의 중소형주 상한선을 대가의 새로운 기준인 1조 원(10,000억)으로 조정
-lynch_picks = safe_df[(safe_df['PBR'] > 0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PBR', ascending=True).head(20)
+# 5. 피터 린치: 합리적 가격의 중소형 성장주 (PEG 1.0 이하, 시총 1조 이하)
+lynch_picks = safe_df[(safe_df['PEG'] > 0) & (safe_df['PEG'] <= 1.0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PEG', ascending=True).head(30)
 
-fisher_picks = safe_df.sort_values('시가총액(억)', ascending=False).head(20)
+# 6. 조엘 그린블랫: 퀄리티와 밸류에이션의 마법공식 (ROE 랭킹 + PER 랭킹 합산)
+magic_df = safe_df[safe_df['시가총액(억)'] >= 500].copy()
+magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['ROE(%)'].rank(ascending=False)
+greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
-oneil_picks = safe_df.sort_values('1개월_수익률(%)', ascending=False).head(20)
+# 7. 윌리엄 오닐: 실적이 뒷받침되는 강력한 모멘텀 (ROE 15% 이상, 시총 1천억 이상 중 1개월 급등주)
+oneil_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-strategies = {
-    "👴 워런 버핏": buffett_picks,
-    "👨‍🦳 피터 린치": lynch_picks,
-    "📈 필립 피셔": fisher_picks,
-    "📚 벤저민 그레이엄": graham_picks,
-    "🎯 존 네프": neff_picks,
-    "🚀 윌리엄 오닐": oneil_picks,
-    "🧙‍♂️ 조엘 그린블랫": greenblatt_picks
-}
 
-all_picks = pd.concat([res.assign(거장스타일=name) for name, res in strategies.items()]).drop_duplicates(subset=['종목코드'])
+# 종목 중복 할당 방지 (가장 엄격한 가치투자 대가부터 픽업)
+strategies_order = [
+    ("📚 벤저민 그레이엄", graham_picks),
+    ("👴 워런 버핏", buffett_picks),
+    ("📈 필립 피셔", fisher_picks),
+    ("👨‍🦳 피터 린치", lynch_picks),
+    ("🎯 존 네프", neff_picks),
+    ("🧙‍♂️ 조엘 그린블랫", greenblatt_picks),
+    ("🚀 윌리엄 오닐", oneil_picks)
+]
+
+all_picks = pd.concat([df.assign(거장스타일=name) for name, df in strategies_order]).drop_duplicates(subset=['종목코드'])
 
 col1, col2, col3 = st.columns(3)
 def draw_cap(title, cap_df, col):
@@ -118,7 +127,6 @@ def draw_cap(title, cap_df, col):
         else:
             st.info("조건에 맞는 종목 없음")
 
-# 첨부해주신 대가의 새로운 시가총액 기준(단위: 억 원) 반영
 draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억)'] <= 3000], col1)
 draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
 draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
@@ -154,16 +162,18 @@ with col_5m:
     draw_top10("5개월_수익률(%)")
 
 st.markdown("---")
-st.markdown("### 🔍 7대 거장별 전체 리스트 및 AI 분석")
-master_tabs = st.tabs(list(strategies.keys()))
+st.markdown("### 🔍 7대 거장별 전체 리스트 및 AI 분석 (V3.0 정밀 지표 추가)")
+strategies_dict = {name: df for name, df in strategies_order}
+master_tabs = st.tabs(list(strategies_dict.keys()))
 
-for i, (strat_name, res_df) in enumerate(strategies.items()):
+for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
     with master_tabs[i]:
         if res_df.empty:
             st.warning("조건에 만족하는 종목이 없습니다.")
             continue
             
-        display_df = res_df[['종목명', '종목코드', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR']].head(30)
+        # 💡 하단 표에 새로운 정밀 지표(ROE, PEG, 배당률)가 출력되도록 컬럼 업데이트
+        display_df = res_df[['종목명', '종목코드', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']].head(30)
         display_df.index = range(1, len(display_df) + 1)
         
         st.dataframe(display_df.round(2), width="stretch")
@@ -183,14 +193,14 @@ for i, (strat_name, res_df) in enumerate(strategies.items()):
                         prompt = f"""
                         전략: {strat_name}
                         종목명: {info['종목명']}
-                        PER: {info['PER']}, PBR: {info['PBR']}
+                        PER: {info['PER']}, PBR: {info['PBR']}, ROE: {info['ROE(%)']}%, PEG: {info['PEG']}, 배당률: {info['배당률(%)']}%
                         1개월 수익률: {info['1개월_수익률(%)']}%, 3개월 수익률: {info['3개월_수익률(%)']}%
                         
-                        위 지표를 바탕으로 이 종목이 왜 이 투자 거장의 철학에 부합하는지, 그리고 현재 모멘텀 관점에서 매력도와 리스크를 3문단으로 요약해 줘.
+                        위의 상세 퀀트 지표를 바탕으로 이 종목이 왜 이 투자 거장의 철학에 부합하는지, 그리고 현재 모멘텀 관점에서 매력도와 리스크를 3문단으로 심도 있게 요약해 줘.
                         """
                         try:
                             model = genai.GenerativeModel('gemini-1.5-pro')
-                            st.success(f"[{selected_stock}] Gemini Pro 분석 완료")
+                            st.success(f"[{selected_stock}] Gemini Pro 심층 분석 완료")
                             st.write(model.generate_content(prompt).text)
                         except Exception as e:
                             st.error(f"오류가 발생했습니다: {e}")
