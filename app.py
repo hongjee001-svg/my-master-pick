@@ -16,7 +16,6 @@ st.markdown("""
     .top10-desc { font-size: 12px; color: #8F95A2; }
     .top10-return { font-size: 20px; font-weight: bold; color: #FF4D4F; }
     
-    /* 상단 체급별 Top 3 리스트 전용 세련된 미니 카드 CSS */
     .cap-box-small { background-color: #1E2129; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .cap-left { display: flex; align-items: center; }
     .cap-icon-small { font-size: 32px; margin-right: 12px; }
@@ -57,29 +56,33 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 7대 거장 투자 전략 정의
-graham_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
+# 💡 기초 위생 필터: 시가총액 500억 이상 & 흑자기업(PER > 0)만 대상으로 하여 잡주 필터링
+safe_df = df[(df['PER'] > 0) & (df['시가총액(억)'] >= 500)].copy()
+
+# 7대 거장 투자 전략 정의 (안전한 데이터프레임 기반으로 수정)
+graham_df = safe_df[safe_df['PBR'] > 0].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(20)
 
-neff_picks = df[df['PER'] > 0].sort_values('PER', ascending=True).head(20)
+neff_picks = safe_df.sort_values('PER', ascending=True).head(20)
 
-magic_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
+magic_df = safe_df[safe_df['PBR'] > 0].copy()
 magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['PBR'].rank(ascending=True)
 greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(20)
 
-buffett_picks = df[(df['PER'] > 0) & (df['PER'] <= 15) & (df['PBR'] > 0) & (df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
+buffett_picks = safe_df[(safe_df['PER'] <= 15) & (safe_df['PBR'] > 0) & (safe_df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
 
-lynch_picks = df[(df['PBR'] > 0) & (df['시가총액(억)'] <= 5000)].sort_values('PBR', ascending=True).head(20)
+lynch_picks = safe_df[(safe_df['PBR'] > 0) & (safe_df['시가총액(억)'] <= 5000)].sort_values('PBR', ascending=True).head(20)
 
-fisher_picks = df[df['시가총액(억)'] > 0].sort_values('시가총액(억)', ascending=False).head(20)
+fisher_picks = safe_df.sort_values('시가총액(억)', ascending=False).head(20)
 
-oneil_picks = df.sort_values('1개월_수익률(%)', ascending=False).head(20)
+# 💡 윌리엄 오닐도 흑자/우량 기업 중에서만 수익률을 찾도록 수정
+oneil_picks = safe_df.sort_values('1개월_수익률(%)', ascending=False).head(20)
 
 strategies = {
     "👴 워런 버핏": buffett_picks,
     "👨‍🦳 피터 린치": lynch_picks,
-    "💎 켄 피셔": fisher_picks,
+    "📈 필립 피셔": fisher_picks,  # 원작에 맞춰 필립 피셔로 변경
     "📚 벤저민 그레이엄": graham_picks,
     "🎯 존 네프": neff_picks,
     "🚀 윌리엄 오닐": oneil_picks,
@@ -93,7 +96,6 @@ def draw_cap(title, cap_df, col):
     with col:
         st.markdown(f"<h4 style='text-align:center'>{title}</h4>", unsafe_allow_html=True)
         if not cap_df.empty:
-            # 💡 1개만 가져오던 것을 상위 3개(Top 3)로 변경
             top_3 = cap_df.sort_values('1개월_수익률(%)', ascending=False).head(3)
             for idx, row in top_3.iterrows():
                 icon, name = row['거장스타일'].split(' ', 1)
