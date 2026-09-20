@@ -56,10 +56,10 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 df = df.fillna(0)
 
-# 💡 기초 위생 필터: 시가총액 500억 이상 & 흑자기업(PER > 0)만 대상으로 하여 잡주 필터링
+# 기초 위생 필터: 시가총액 500억 이상 & 흑자기업(PER > 0)만 대상으로 하여 잡주 필터링
 safe_df = df[(df['PER'] > 0) & (df['시가총액(억)'] >= 500)].copy()
 
-# 7대 거장 투자 전략 정의 (안전한 데이터프레임 기반으로 수정)
+# 7대 거장 투자 전략 정의
 graham_df = safe_df[safe_df['PBR'] > 0].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(20)
@@ -72,17 +72,17 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(20)
 
 buffett_picks = safe_df[(safe_df['PER'] <= 15) & (safe_df['PBR'] > 0) & (safe_df['PBR'] <= 1.5)].sort_values('시가총액(억)', ascending=False).head(20)
 
-lynch_picks = safe_df[(safe_df['PBR'] > 0) & (safe_df['시가총액(억)'] <= 5000)].sort_values('PBR', ascending=True).head(20)
+# 피터 린치 전략의 중소형주 상한선을 대가의 새로운 기준인 1조 원(10,000억)으로 조정
+lynch_picks = safe_df[(safe_df['PBR'] > 0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PBR', ascending=True).head(20)
 
 fisher_picks = safe_df.sort_values('시가총액(억)', ascending=False).head(20)
 
-# 💡 윌리엄 오닐도 흑자/우량 기업 중에서만 수익률을 찾도록 수정
 oneil_picks = safe_df.sort_values('1개월_수익률(%)', ascending=False).head(20)
 
 strategies = {
     "👴 워런 버핏": buffett_picks,
     "👨‍🦳 피터 린치": lynch_picks,
-    "📈 필립 피셔": fisher_picks,  # 원작에 맞춰 필립 피셔로 변경
+    "📈 필립 피셔": fisher_picks,
     "📚 벤저민 그레이엄": graham_picks,
     "🎯 존 네프": neff_picks,
     "🚀 윌리엄 오닐": oneil_picks,
@@ -118,9 +118,10 @@ def draw_cap(title, cap_df, col):
         else:
             st.info("조건에 맞는 종목 없음")
 
-draw_cap("소형주 (1,000억 이하)", all_picks[all_picks['시가총액(억)'] <= 1000], col1)
-draw_cap("중형주 (1,000억~5,000억)", all_picks[(all_picks['시가총액(억)'] > 1000) & (all_picks['시가총액(억)'] <= 5000)], col2)
-draw_cap("대형주 (5,000억 초과)", all_picks[all_picks['시가총액(억)'] > 5000], col3)
+# 첨부해주신 대가의 새로운 시가총액 기준(단위: 억 원) 반영
+draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억)'] <= 3000], col1)
+draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
+draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
 
 def draw_top10(period_col):
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
