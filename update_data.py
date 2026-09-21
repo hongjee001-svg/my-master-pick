@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 import FinanceDataReader as fdr
 from pykrx import stock
 
-print("📊 [V3.0] KIS API + 정밀 퀀트 지표(ROE, PEG, DIV) 하이브리드 수집 시작...")
+print("📊 [V3.1] KIS API + 정밀 퀀트 지표 + 업종(섹터) 수집 시작...")
 
 APP_KEY = os.environ.get("KIS_APP_KEY")
 APP_SECRET = os.environ.get("KIS_APP_SECRET")
@@ -44,13 +44,19 @@ try:
 except:
     today_str = now.strftime("%Y%m%d")
 
-# 💡 pykrx를 활용해 시장 전체 배당수익률(DIV) 일괄 다운로드
-print("📈 전체 상장사 배당(DIV) 및 펀더멘탈 데이터 확보 중...")
+print("📈 전체 상장사 배당(DIV) 및 업종 데이터 확보 중...")
 try:
     time.sleep(1)
     df_fund = stock.get_market_fundamental(today_str, market="ALL")
 except:
     df_fund = pd.DataFrame()
+
+# 💡 업종(섹터) 데이터를 가져오기 위해 KRX-DESC 추가 조회
+try:
+    df_desc = fdr.StockListing('KRX-DESC')
+    sector_dict = dict(zip(df_desc['Code'], df_desc['Sector']))
+except:
+    sector_dict = {}
 
 df_krx = fdr.StockListing('KRX')
 df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
@@ -82,12 +88,14 @@ for idx, row in df_krx.iterrows():
             
         if current_price == 0: continue
 
-        # 💡 정밀 퀀트 지표 계산 로직 (ROE, PEG, DIV)
+        # 💡 업종 및 정밀 퀀트 지표 매칭
+        sector = sector_dict.get(code, "기타")
+        if pd.isna(sector) or not sector: sector = "기타"
+        
         div = float(df_fund.loc[code, 'DIV']) if not df_fund.empty and code in df_fund.index else 0.0
         roe = round((pbr / per) * 100, 2) if per > 0 else 0.0
         peg = round(per / roe, 2) if roe > 0 else 0.0
 
-        # 과거 수익률 계산
         ret_1m, ret_3m, ret_5m = 0.0, 0.0, 0.0
         try:
             hist = fdr.DataReader(code, now - relativedelta(months=6), now)
@@ -103,7 +111,7 @@ for idx, row in df_krx.iterrows():
         except: pass
             
         data_list.append({
-            "종목코드": code, "종목명": name, "현재가": current_price,
+            "종목코드": code, "종목명": name, "업종": sector, "현재가": current_price,
             "PER": per, "PBR": pbr, "ROE(%)": roe, "PEG": peg, "배당률(%)": div,
             "시가총액(억)": round(marcap, 2),
             "1개월_수익률(%)": ret_1m, "3개월_수익률(%)": ret_3m, "5개월_수익률(%)": ret_5m
@@ -117,6 +125,6 @@ for idx, row in df_krx.iterrows():
 if data_list:
     df_master = pd.DataFrame(data_list)
     df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-    print(f"✅ V3.0 수집 완료: 총 {len(df_master)}개 종목 저장 완료.")
+    print(f"✅ V3.1 수집 완료: 총 {len(df_master)}개 종목 저장 완료.")
 else:
     print("❌ 수집된 데이터가 없습니다."); exit(1)
