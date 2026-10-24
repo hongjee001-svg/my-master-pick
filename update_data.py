@@ -1,148 +1,208 @@
-import os
-import time
-import requests
+import streamlit as st
 import pandas as pd
-import json
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
-import FinanceDataReader as fdr
-from pykrx import stock
+import numpy as np
+import google.generativeai as genai
+import os
 
-print("📊 [V4.0] 7대 거장 퀀트 지표 + 월봉 엔벨로프 하단 이탈 수집 시작...")
+st.set_page_config(page_title="7대 거장 마스터픽 스크리너", page_icon="👑", layout="wide")
 
-APP_KEY = os.environ.get("KIS_APP_KEY")
-APP_SECRET = os.environ.get("KIS_APP_SECRET")
-URL_BASE = "https://openapi.koreainvestment.com:9443"
-
-if not APP_KEY or not APP_SECRET:
-    print("❌ 오류: API 키가 없습니다.")
-    exit(1)
-
-token_headers = {"content-type": "application/json"}
-token_body = {"grant_type": "client_credentials", "appkey": APP_KEY, "appsecret": APP_SECRET}
-try:
-    res = requests.post(f"{URL_BASE}/oauth2/tokenP", headers=token_headers, data=json.dumps(token_body), timeout=10)
-    ACCESS_TOKEN = res.json().get("access_token")
-    print("✅ KIS API 접근 토큰 발급 완료")
-except Exception as e:
-    print(f"❌ 인증 실패: {e}"); exit(1)
-
-api_headers = {
-    "content-type": "application/json; charset=utf-8",
-    "authorization": f"Bearer {ACCESS_TOKEN}",
-    "appkey": APP_KEY,
-    "appsecret": APP_SECRET,
-    "tr_id": "FHKST01010100",  
-    "custtype": "P"
-}
-
-now = datetime.now()
-try:
-    kospi_df = fdr.DataReader('KS11', now - relativedelta(months=1), now)
-    valid_days = kospi_df.index
-    today_str = valid_days[-1].strftime("%Y%m%d")
-except:
-    today_str = now.strftime("%Y%m%d")
-
-print("📈 전체 상장사 배당(DIV) 및 업종 데이터 확보 중...")
-try:
-    time.sleep(1)
-    df_fund = stock.get_market_fundamental(today_str, market="ALL")
-except:
-    df_fund = pd.DataFrame()
-
-try:
-    df_desc = fdr.StockListing('KRX-DESC')
-    sector_dict = dict(zip(df_desc['Code'], df_desc['Sector']))
-except:
-    sector_dict = {}
-
-df_krx = fdr.StockListing('KRX')
-df_krx = df_krx[df_krx['Code'].str.match(r'^\d{6}$')]
-total_count = len(df_krx)
-
-data_list = []
-
-for idx, row in df_krx.iterrows():
-    code = str(row['Code'])
-    name = row['Name']
+st.markdown("""
+<style>
+    .top10-card { background-color: #1E2129; border-radius: 10px; padding: 15px 20px; margin-bottom: 10px; display: flex; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .top10-rank { font-size: 20px; font-weight: bold; color: #E0E2E7; width: 40px; }
+    .top10-icon { font-size: 35px; margin-right: 15px; }
+    .top10-info { flex-grow: 1; }
+    .top10-name { font-size: 18px; font-weight: bold; color: #FFFFFF; margin-bottom: 2px;}
+    .top10-desc { font-size: 12px; color: #8F95A2; }
+    .top10-return { font-size: 20px; font-weight: bold; color: #FF4D4F; }
     
-    try:
-        time.sleep(0.2) 
-        
-        url = f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-price"
-        params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": code}
-        response = requests.get(url, headers=api_headers, params=params, timeout=5)
-        res_data = response.json()
-        
-        current_price = float(row.get('Close') or 0)
-        per, pbr, marcap = 0.0, 0.0, 0.0
-        
-        if res_data.get('rt_cd') == '0':
-            output = res_data.get('output', {})
-            current_price = float(output.get('stck_prpr') or current_price)
-            per = float(output.get('per') or 0)
-            pbr = float(output.get('pbr') or 0)
-            marcap = float(output.get('hts_avls') or 0) / 100 
-            
-        if current_price == 0: continue
+    .cap-box-small { background-color: #1E2129; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .cap-left { display: flex; align-items: center; }
+    .cap-icon-small { font-size: 32px; margin-right: 12px; }
+    .cap-info-small { text-align: left; }
+    .cap-style-small { color: #8F95A2; font-size: 11px; margin-bottom: 2px; }
+    .cap-name-small { color: #FFFFFF; font-size: 16px; font-weight: bold; }
+    .cap-return-small { font-size: 16px; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
 
-        sector = sector_dict.get(code, "기타")
-        if pd.isna(sector) or not sector: sector = "기타"
-        
-        div = float(df_fund.loc[code, 'DIV']) if not df_fund.empty and code in df_fund.index else 0.0
-        roe = round((pbr / per) * 100, 2) if per > 0 else 0.0
-        peg = round(per / roe, 2) if roe > 0 else 0.0
+with st.sidebar:
+    st.header("🔑 AI 설정")
+    saved_keys = st.query_params.get_all("gemini_key")
+    new_key = st.text_input("새 Gemini API 키 입력", type="password")
+    if st.button("➕ 키 추가"):
+        if new_key and new_key not in saved_keys:
+            saved_keys.append(new_key)
+            st.query_params["gemini_key"] = saved_keys
+            st.rerun()
 
-        ret_1m, ret_3m, ret_5m = 0.0, 0.0, 0.0
-        env_20_sma, env_down_10, env_down_20, env_down_30 = 0.0, 0.0, 0.0, 0.0
-        
-        try:
-            # 💡 20개월 이평선 계산을 위해 과거 25개월치 주가 데이터를 수집
-            hist = fdr.DataReader(code, now - relativedelta(months=25), now)
-            if not hist.empty and len(hist) > 5:
-                p_current = hist['Close'].iloc[-1]
-                
-                # 1. 과거 수익률 계산
-                p_1m = hist['Close'].iloc[-20] if len(hist) >= 20 else hist['Close'].iloc[0]
-                p_3m = hist['Close'].iloc[-60] if len(hist) >= 60 else hist['Close'].iloc[0]
-                p_5m = hist['Close'].iloc[-100] if len(hist) >= 100 else hist['Close'].iloc[0]
-                
-                if p_1m > 0: ret_1m = round(((p_current - p_1m) / p_1m) * 100, 2)
-                if p_3m > 0: ret_3m = round(((p_current - p_3m) / p_3m) * 100, 2)
-                if p_5m > 0: ret_5m = round(((p_current - p_5m) / p_5m) * 100, 2)
-                
-                # 2. 💡 월봉 엔벨로프 계산
-                # 일별 데이터를 월봉(월말 종가) 기준으로 리샘플링
-                try:
-                    hist_m = hist['Close'].resample('ME').last() # 최신 pandas 버전에 맞춤
-                except:
-                    hist_m = hist['Close'].resample('M').last()  # 구버전 pandas 호환
-                
-                # 데이터가 20개월 이상 존재할 경우에만 계산
-                if len(hist_m) >= 20:
-                    env_20_sma = round(hist_m.tail(20).mean(), 2)
-                    env_down_10 = round(env_20_sma * 0.9, 2) # -10% 하단선
-                    env_down_20 = round(env_20_sma * 0.8, 2) # -20% 하단선
-                    env_down_30 = round(env_20_sma * 0.7, 2) # -30% 하단선
-        except: pass
-            
-        data_list.append({
-            "종목코드": code, "종목명": name, "업종": sector, "현재가": current_price,
-            "PER": per, "PBR": pbr, "ROE(%)": roe, "PEG": peg, "배당률(%)": div,
-            "시가총액(억)": round(marcap, 2),
-            "1개월_수익률(%)": ret_1m, "3개월_수익률(%)": ret_3m, "5개월_수익률(%)": ret_5m,
-            "월봉_20선": env_20_sma, "엔벨_하단_10": env_down_10, "엔벨_하단_20": env_down_20, "엔벨_하단_30": env_down_30
-        })
-            
-        if (idx + 1) % 100 == 0:
-            print(f"수집 진행 상황: {idx + 1}/{total_count}개 완료")
-            
-    except: continue
+    if saved_keys:
+        selected_key = st.selectbox("사용할 키 선택:", options=saved_keys)
+        if st.button("🗑️ 선택한 키 삭제"):
+            saved_keys.remove(selected_key)
+            st.query_params["gemini_key"] = saved_keys
+            st.rerun()
+        genai.configure(api_key=selected_key)
+        st.success("✨ 키가 활성화되었습니다.")
+    else:
+        st.warning("API 키를 추가해주세요.")
 
-if data_list:
-    df_master = pd.DataFrame(data_list)
-    df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-    print(f"✅ V4.0 수집 완료: 총 {len(df_master)}개 종목 저장 완료.")
-else:
-    print("❌ 수집된 데이터가 없습니다."); exit(1)
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.2 Pro)")
+
+if not os.path.exists("stock_data.csv"):
+    st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
+    st.stop()
+
+df = pd.read_csv("stock_data.csv")
+if '업종' not in df.columns: df['업종'] = '기타'
+if '엔벨_하단_10' not in df.columns: df['엔벨_하단_10'] = 0.0
+if '엔벨_하단_20' not in df.columns: df['엔벨_하단_20'] = 0.0
+
+df['업종'] = df['업종'].fillna('기타').astype(str)
+df = df.fillna(0)
+
+# 기초 위생 필터: 정상 흑자 기업만 통과
+safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
+
+graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5) & (safe_df['배당률(%)'] > 0)].copy()
+graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
+graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
+
+buffett_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['PER'] <= 20) & (safe_df['시가총액(억)'] >= 10000)].sort_values('ROE(%)', ascending=False).head(30)
+fisher_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 10000) & (safe_df['3개월_수익률(%)'] > 0)].sort_values('3개월_수익률(%)', ascending=False).head(30)
+neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 15) & (safe_df['배당률(%)'] >= 2.0)].sort_values('배당률(%)', ascending=False).head(30)
+lynch_picks = safe_df[(safe_df['PEG'] > 0) & (safe_df['PEG'] <= 1.0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PEG', ascending=True).head(30)
+
+magic_df = safe_df[safe_df['시가총액(억)'] >= 500].copy()
+magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['ROE(%)'].rank(ascending=False)
+greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
+
+oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
+
+# 💡 8번째 전략: 월봉 엔벨로프 첫 번째 선 갓 이탈 (10%선과 20%선 사이의 골든존)
+envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10']) & (df['현재가'] > df['엔벨_하단_20'])].copy()
+
+if not envelope_picks.empty:
+    envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
+    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False).head(30)
+
+strategies_order = [
+    ("📚 벤저민 그레이엄", graham_picks),
+    ("👴 워런 버핏", buffett_picks),
+    ("📈 필립 피셔", fisher_picks),
+    ("👨‍🦳 피터 린치", lynch_picks),
+    ("🎯 존 네프", neff_picks),
+    ("🧙‍♂️ 조엘 그린블랫", greenblatt_picks),
+    ("🚀 윌리엄 오닐", oneil_picks)
+]
+
+all_picks = pd.concat([res_df.assign(거장스타일=name) for name, res_df in strategies_order]).drop_duplicates(subset=['종목코드'])
+
+col1, col2, col3 = st.columns(3)
+def draw_cap(title, cap_df, col):
+    with col:
+        st.markdown(f"<h4 style='text-align:center'>{title}</h4>", unsafe_allow_html=True)
+        if not cap_df.empty:
+            top_3 = cap_df.sort_values('1개월_수익률(%)', ascending=False).head(3)
+            for idx, row in top_3.iterrows():
+                icon, name = row['거장스타일'].split(' ', 1)
+                ret_val = row['1개월_수익률(%)']
+                color = "#FF4D4F" if ret_val >= 0 else "#4C84FF"
+                sign = "+" if ret_val > 0 else ""
+                
+                st.markdown(f"""
+                <div class='cap-box-small'>
+                    <div class='cap-left'>
+                        <div class='cap-icon-small'>{icon}</div>
+                        <div class='cap-info-small'>
+                            <div class='cap-style-small'>{name} | {row['업종']}</div>
+                            <div class='cap-name-small'>{row['종목명']}</div>
+                        </div>
+                    </div>
+                    <div class='cap-return-small' style='color:{color};'>{sign}{ret_val}%</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("조건에 맞는 종목 없음")
+
+draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억)'] <= 3000], col1)
+draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
+draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
+
+def draw_top10(period_col):
+    top_df = all_picks.sort_values(period_col, ascending=False).head(10)
+    if top_df.empty:
+        st.warning("표시할 종목이 없습니다.")
+        return
+    for idx, row in enumerate(top_df.iterrows(), 1):
+        row_data = row[1]
+        icon, name = row_data['거장스타일'].split(' ', 1)
+        val = row_data[period_col]
+        color = "#FF4D4F" if val >= 0 else "#4C84FF"
+        sign = "+" if val > 0 else ""
+        st.markdown(f"<div class='top10-card'><div class='top10-rank'>{idx}</div><div class='top10-icon'>{icon}</div><div class='top10-info'><div class='top10-name'>{row_data['종목명']}</div><div class='top10-desc'>{name} | {row_data['업종']}</div></div><div class='top10-return' style='color:{color};'>{sign}{val}%</div></div>", unsafe_allow_html=True)
+
+st.markdown("---")
+st.markdown("### 🔥 Best 상승률 Top 10")
+
+col_1m, col_3m, col_5m = st.columns(3)
+
+with col_1m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("1개월_수익률(%)")
+
+with col_3m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("3개월_수익률(%)")
+
+with col_5m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>5개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("5개월_수익률(%)")
+
+st.markdown("---")
+st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
+
+strategies_dict = {name: df for name, df in strategies_order}
+strategies_dict["📉 낙폭과대 (엔벨로프)"] = envelope_picks
+
+master_tabs = st.tabs(list(strategies_dict.keys()))
+
+for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
+    with master_tabs[i]:
+        if res_df.empty:
+            st.warning("현재 조건에 만족하는 종목이 없습니다.")
+            continue
+            
+        if strat_name == "📉 낙폭과대 (엔벨로프)":
+            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '월봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
+        else:
+            display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']].head(30)
+            
+        display_df.index = range(1, len(display_df) + 1)
+        st.dataframe(display_df.round(2), width="stretch")
+        
+        col_ai1, col_ai2 = st.columns([2, 1])
+        with col_ai1:
+            selected_stock = st.selectbox("분석할 종목 선택:", options=display_df['종목명'], key=f"sel_{i}")
+        with col_ai2:
+            st.write("")
+            st.write("")
+            if st.button("✨ AI 투자 리포트 생성", key=f"btn_{i}", width="stretch"):
+                if not saved_keys:
+                    st.warning("왼쪽 사이드바에서 API 키를 먼저 추가해주세요.")
+                else:
+                    with st.spinner("Gemini Pro가 심층 분석을 진행 중입니다..."):
+                        info = display_df[display_df['종목명'] == selected_stock].iloc[0]
+                        prompt = f"""
+                        분석 타겟 종목: {info['종목명']} (업종: {info['업종']})
+                        분석 접근 전략: {strat_name}
+                        
+                        위 종목의 현재 지표 현황과 산업 특징, 그리고 선택된 전략의 관점에서 
+                        현재 모멘텀의 매력도와 진입 시 고려해야 할 리스크를 3문단으로 심도 있게 요약해 줘.
+                        """
+                        try:
+                            model = genai.GenerativeModel('gemini-1.5-pro')
+                            st.success(f"[{selected_stock}] Gemini Pro 심층 분석 완료")
+                            st.write(model.generate_content(prompt).text)
+                        except Exception as e:
+                            st.error(f"오류가 발생했습니다: {e}")
