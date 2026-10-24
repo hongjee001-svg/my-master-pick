@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.0 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.1 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -63,25 +63,24 @@ df = df.fillna(0)
 # 기초 위생 필터: 정상 흑자 기업만 통과
 safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 
+# 💡 거장별 조건 완화 (한국 시장 현실 반영)
 graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5) & (safe_df['배당률(%)'] > 0)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
 
-buffett_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['PER'] <= 15) & (safe_df['시가총액(억)'] >= 10000)].sort_values('ROE(%)', ascending=False).head(30)
-fisher_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['시가총액(억)'] >= 10000) & (safe_df['3개월_수익률(%)'] > 0)].sort_values('3개월_수익률(%)', ascending=False).head(30)
-neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 10) & (safe_df['배당률(%)'] >= 2.0)].sort_values('배당률(%)', ascending=False).head(30)
+buffett_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['PER'] <= 20) & (safe_df['시가총액(억)'] >= 10000)].sort_values('ROE(%)', ascending=False).head(30)
+fisher_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 10000) & (safe_df['3개월_수익률(%)'] > 0)].sort_values('3개월_수익률(%)', ascending=False).head(30)
+neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 15) & (safe_df['배당률(%)'] >= 2.0)].sort_values('배당률(%)', ascending=False).head(30)
 lynch_picks = safe_df[(safe_df['PEG'] > 0) & (safe_df['PEG'] <= 1.0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PEG', ascending=True).head(30)
 
 magic_df = safe_df[safe_df['시가총액(억)'] >= 500].copy()
 magic_df['마법순위'] = magic_df['PER'].rank(ascending=True) + magic_df['ROE(%)'].rank(ascending=False)
 greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
-oneil_picks = safe_df[(safe_df['ROE(%)'] >= 15) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
+oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-# 💡 8번째 전략: 월봉 엔벨로프(-10%) 하단 이탈 낙폭과대주 
-# 현재가가 엔벨_하단_10선보다 작고(이탈), 엔벨선 데이터가 존재하는 경우
+# 엔벨로프 로직 유지
 envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] < df['엔벨_하단_10'])].copy()
-# 하단선 대비 이탈률(%) 계산 (음수가 클수록 더 많이 빠진 것)
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
     envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=True).head(30)
@@ -129,10 +128,41 @@ draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억
 draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
 draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
 
+# 💡 누락되었던 Top 10 함수 복구
+def draw_top10(period_col):
+    top_df = all_picks.sort_values(period_col, ascending=False).head(10)
+    if top_df.empty:
+        st.warning("표시할 종목이 없습니다.")
+        return
+    for idx, row in enumerate(top_df.iterrows(), 1):
+        row_data = row[1]
+        icon, name = row_data['거장스타일'].split(' ', 1)
+        val = row_data[period_col]
+        color = "#FF4D4F" if val >= 0 else "#4C84FF"
+        sign = "+" if val > 0 else ""
+        st.markdown(f"<div class='top10-card'><div class='top10-rank'>{idx}</div><div class='top10-icon'>{icon}</div><div class='top10-info'><div class='top10-name'>{row_data['종목명']}</div><div class='top10-desc'>{name} | {row_data['업종']}</div></div><div class='top10-return' style='color:{color};'>{sign}{val}%</div></div>", unsafe_allow_html=True)
+
+# 💡 누락되었던 Top 10 화면 레이아웃 복구
+st.markdown("---")
+st.markdown("### 🔥 Best 상승률 Top 10")
+
+col_1m, col_3m, col_5m = st.columns(3)
+
+with col_1m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("1개월_수익률(%)")
+
+with col_3m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("3개월_수익률(%)")
+
+with col_5m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>5개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("5개월_수익률(%)")
+
 st.markdown("---")
 st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
 
-# 기존 전략 사전에 엔벨로프 전략을 추가
 strategies_dict = {name: df for name, df in strategies_order}
 strategies_dict["📉 낙폭과대 (엔벨로프)"] = envelope_picks
 
@@ -144,7 +174,6 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             st.warning("현재 조건에 만족하는 종목이 없습니다.")
             continue
             
-        # 엔벨로프 탭일 경우 표시할 컬럼을 다르게 세팅
         if strat_name == "📉 낙폭과대 (엔벨로프)":
             display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '월봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
         else:
