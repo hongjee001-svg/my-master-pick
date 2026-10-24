@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.1 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.3 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -56,14 +56,13 @@ if not os.path.exists("stock_data.csv"):
 df = pd.read_csv("stock_data.csv")
 if '업종' not in df.columns: df['업종'] = '기타'
 if '엔벨_하단_10' not in df.columns: df['엔벨_하단_10'] = 0.0
+if '엔벨_하단_20' not in df.columns: df['엔벨_하단_20'] = 0.0
 
 df['업종'] = df['업종'].fillna('기타').astype(str)
 df = df.fillna(0)
 
-# 기초 위생 필터: 정상 흑자 기업만 통과
 safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 
-# 💡 거장별 조건 완화 (한국 시장 현실 반영)
 graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5) & (safe_df['배당률(%)'] > 0)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
@@ -79,11 +78,13 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
 oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-# 엔벨로프 로직 유지
-envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] < df['엔벨_하단_10'])].copy()
+# 💡 8번째 전략: 월봉 엔벨로프 첫 번째 선(10%) 갓 이탈 포착 (이탈률 0% ~ -5% 이내)
+envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10'])].copy()
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
-    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=True).head(30)
+    # 한참 밑에 박혀있는 종목 강제 삭제하고 방금 깨진 진짜 초기 자리만 남김
+    envelope_picks = envelope_picks[(envelope_picks['이탈률(%)'] >= -5.0) & (envelope_picks['이탈률(%)'] <= 0.0)]
+    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False).head(30)
 
 strategies_order = [
     ("📚 벤저민 그레이엄", graham_picks),
@@ -128,7 +129,6 @@ draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억
 draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
 draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
 
-# 💡 누락되었던 Top 10 함수 복구
 def draw_top10(period_col):
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
     if top_df.empty:
@@ -142,7 +142,6 @@ def draw_top10(period_col):
         sign = "+" if val > 0 else ""
         st.markdown(f"<div class='top10-card'><div class='top10-rank'>{idx}</div><div class='top10-icon'>{icon}</div><div class='top10-info'><div class='top10-name'>{row_data['종목명']}</div><div class='top10-desc'>{name} | {row_data['업종']}</div></div><div class='top10-return' style='color:{color};'>{sign}{val}%</div></div>", unsafe_allow_html=True)
 
-# 💡 누락되었던 Top 10 화면 레이아웃 복구
 st.markdown("---")
 st.markdown("### 🔥 Best 상승률 Top 10")
 
