@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.4 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.5 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -63,7 +63,6 @@ df = df.fillna(0)
 
 safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 
-# 💡 텅 비는 현상 방지를 위해 대가들의 조건을 유연하게 완화 (정렬 우선순위로 변경)
 graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
@@ -79,7 +78,6 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
 oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-# 엔벨로프 로직 유지 (이탈률 0% ~ -5% 이내)
 envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10'])].copy()
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
@@ -96,10 +94,8 @@ strategies_order = [
     ("🚀 윌리엄 오닐", oneil_picks)
 ]
 
-# Top 10용 단일 스타일 데이터 프레임
 all_picks = pd.concat([res_df.assign(거장스타일=name) for name, res_df in strategies_order]).drop_duplicates(subset=['종목코드'])
 
-# 💡 상단 카드용: 대가들의 '중복 픽(Consensus)' 데이터 생성
 all_picks_raw = pd.concat([res_df.assign(거장스타일=name) for name, res_df in strategies_order])
 consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '현재가', '시가총액(억)', '1개월_수익률(%)']).agg(
     중복횟수=('거장스타일', 'count'),
@@ -111,13 +107,11 @@ def draw_consensus_cap(title, cap_df, col):
     with col:
         st.markdown(f"<h4 style='text-align:center'>{title}</h4>", unsafe_allow_html=True)
         if not cap_df.empty:
-            # 💡 중복으로 추천받은 횟수가 많은 순서 -> 그 다음 1개월 수익률 순서로 정렬
             top_3 = cap_df.sort_values(['중복횟수', '1개월_수익률(%)'], ascending=[False, False]).head(3)
             for idx, row in top_3.iterrows():
                 masters = row['거장목록']
                 overlap_cnt = row['중복횟수']
                 
-                # 중복 픽일 경우 여러 대가의 아이콘을 합쳐서 보여줌
                 icons = "".join([m.split(' ')[0] for m in masters[:3]]) 
                 if overlap_cnt > 1:
                     style_text = f"🔥 {overlap_cnt}명의 대가 중복 픽"
@@ -143,12 +137,16 @@ def draw_consensus_cap(title, cap_df, col):
         else:
             st.info("조건에 맞는 종목 없음")
 
-# 💡 소제목 수정 완벽 적용
 draw_consensus_cap("소형주 (3,000억원 이하)", consensus_df[consensus_df['시가총액(억)'] <= 3000], col1)
 draw_consensus_cap("중형주 (3,000억원~1조원)", consensus_df[(consensus_df['시가총액(억)'] > 3000) & (consensus_df['시가총액(억)'] <= 10000)], col2)
 draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시가총액(억)'] > 10000], col3)
 
 def draw_top10(period_col):
+    # 💡 6개월 수익률 컬럼이 없을 경우 예외 처리
+    if period_col not in all_picks.columns:
+        st.warning("아직 6개월 데이터가 수집되지 않았습니다.")
+        return
+        
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
     if top_df.empty:
         st.warning("표시할 종목이 없습니다.")
@@ -164,7 +162,7 @@ def draw_top10(period_col):
 st.markdown("---")
 st.markdown("### 🔥 Best 상승률 Top 10")
 
-col_1m, col_3m, col_5m = st.columns(3)
+col_1m, col_3m, col_6m = st.columns(3)
 
 with col_1m:
     st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
@@ -174,9 +172,10 @@ with col_3m:
     st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
     draw_top10("3개월_수익률(%)")
 
-with col_5m:
-    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>5개월 Best</h5>", unsafe_allow_html=True)
-    draw_top10("5개월_수익률(%)")
+# 💡 UI를 5개월에서 6개월로 수정
+with col_6m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>6개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("6개월_수익률(%)")
 
 st.markdown("---")
 st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
@@ -195,7 +194,9 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
         if strat_name == "📉 낙폭과대 (엔벨로프)":
             display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '월봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
         else:
-            display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']].head(30)
+            # 💡 하단 표도 6개월로 통일
+            display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
+            display_df = display_df.head(30)
             
         display_df.index = range(1, len(display_df) + 1)
         st.dataframe(display_df.round(2), width="stretch")
