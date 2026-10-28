@@ -18,7 +18,7 @@ st.markdown("""
     
     .cap-box-small { background-color: #1E2129; border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     .cap-left { display: flex; align-items: center; }
-    .cap-icon-small { font-size: 32px; margin-right: 12px; }
+    .cap-icon-small { font-size: 32px; margin-right: 12px; letter-spacing: -5px; }
     .cap-info-small { text-align: left; }
     .cap-style-small { color: #8F95A2; font-size: 11px; margin-bottom: 2px; }
     .cap-name-small { color: #FFFFFF; font-size: 16px; font-weight: bold; }
@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.3 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.4 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -63,13 +63,14 @@ df = df.fillna(0)
 
 safe_df = df[(df['PER'] > 0) & (df['PBR'] > 0)].copy()
 
-graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5) & (safe_df['배당률(%)'] > 0)].copy()
+# 💡 텅 비는 현상 방지를 위해 대가들의 조건을 유연하게 완화 (정렬 우선순위로 변경)
+graham_df = safe_df[(safe_df['PER'] * safe_df['PBR'] <= 22.5)].copy()
 graham_df['그레이엄지수'] = graham_df['PER'] * graham_df['PBR']
 graham_picks = graham_df.sort_values('그레이엄지수', ascending=True).head(30)
 
 buffett_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['PER'] <= 20) & (safe_df['시가총액(억)'] >= 10000)].sort_values('ROE(%)', ascending=False).head(30)
-fisher_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 10000) & (safe_df['3개월_수익률(%)'] > 0)].sort_values('3개월_수익률(%)', ascending=False).head(30)
-neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 15) & (safe_df['배당률(%)'] >= 2.0)].sort_values('배당률(%)', ascending=False).head(30)
+fisher_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 10000)].sort_values('3개월_수익률(%)', ascending=False).head(30)
+neff_picks = safe_df[(safe_df['PER'] >= 5) & (safe_df['PER'] <= 15)].sort_values('배당률(%)', ascending=False).head(30)
 lynch_picks = safe_df[(safe_df['PEG'] > 0) & (safe_df['PEG'] <= 1.0) & (safe_df['시가총액(억)'] <= 10000)].sort_values('PEG', ascending=True).head(30)
 
 magic_df = safe_df[safe_df['시가총액(억)'] >= 500].copy()
@@ -78,11 +79,10 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
 oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-# 💡 8번째 전략: 월봉 엔벨로프 첫 번째 선(10%) 갓 이탈 포착 (이탈률 0% ~ -5% 이내)
+# 엔벨로프 로직 유지 (이탈률 0% ~ -5% 이내)
 envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10'])].copy()
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
-    # 한참 밑에 박혀있는 종목 강제 삭제하고 방금 깨진 진짜 초기 자리만 남김
     envelope_picks = envelope_picks[(envelope_picks['이탈률(%)'] >= -5.0) & (envelope_picks['이탈률(%)'] <= 0.0)]
     envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False).head(30)
 
@@ -96,16 +96,34 @@ strategies_order = [
     ("🚀 윌리엄 오닐", oneil_picks)
 ]
 
+# Top 10용 단일 스타일 데이터 프레임
 all_picks = pd.concat([res_df.assign(거장스타일=name) for name, res_df in strategies_order]).drop_duplicates(subset=['종목코드'])
 
+# 💡 상단 카드용: 대가들의 '중복 픽(Consensus)' 데이터 생성
+all_picks_raw = pd.concat([res_df.assign(거장스타일=name) for name, res_df in strategies_order])
+consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '현재가', '시가총액(억)', '1개월_수익률(%)']).agg(
+    중복횟수=('거장스타일', 'count'),
+    거장목록=('거장스타일', lambda x: list(x))
+).reset_index()
+
 col1, col2, col3 = st.columns(3)
-def draw_cap(title, cap_df, col):
+def draw_consensus_cap(title, cap_df, col):
     with col:
         st.markdown(f"<h4 style='text-align:center'>{title}</h4>", unsafe_allow_html=True)
         if not cap_df.empty:
-            top_3 = cap_df.sort_values('1개월_수익률(%)', ascending=False).head(3)
+            # 💡 중복으로 추천받은 횟수가 많은 순서 -> 그 다음 1개월 수익률 순서로 정렬
+            top_3 = cap_df.sort_values(['중복횟수', '1개월_수익률(%)'], ascending=[False, False]).head(3)
             for idx, row in top_3.iterrows():
-                icon, name = row['거장스타일'].split(' ', 1)
+                masters = row['거장목록']
+                overlap_cnt = row['중복횟수']
+                
+                # 중복 픽일 경우 여러 대가의 아이콘을 합쳐서 보여줌
+                icons = "".join([m.split(' ')[0] for m in masters[:3]]) 
+                if overlap_cnt > 1:
+                    style_text = f"🔥 {overlap_cnt}명의 대가 중복 픽"
+                else:
+                    style_text = masters[0].split(' ', 1)[1]
+                    
                 ret_val = row['1개월_수익률(%)']
                 color = "#FF4D4F" if ret_val >= 0 else "#4C84FF"
                 sign = "+" if ret_val > 0 else ""
@@ -113,9 +131,9 @@ def draw_cap(title, cap_df, col):
                 st.markdown(f"""
                 <div class='cap-box-small'>
                     <div class='cap-left'>
-                        <div class='cap-icon-small'>{icon}</div>
+                        <div class='cap-icon-small'>{icons}</div>
                         <div class='cap-info-small'>
-                            <div class='cap-style-small'>{name} | {row['업종']}</div>
+                            <div class='cap-style-small'>{style_text} | {row['업종']}</div>
                             <div class='cap-name-small'>{row['종목명']}</div>
                         </div>
                     </div>
@@ -125,9 +143,10 @@ def draw_cap(title, cap_df, col):
         else:
             st.info("조건에 맞는 종목 없음")
 
-draw_cap("소형주 (3,000억원 이하)", all_picks[all_picks['시가총액(억)'] <= 3000], col1)
-draw_cap("중소형주 (3,000억원~1조원)", all_picks[(all_picks['시가총액(억)'] > 3000) & (all_picks['시가총액(억)'] <= 10000)], col2)
-draw_cap("중대형주 (1조원 초과)", all_picks[all_picks['시가총액(억)'] > 10000], col3)
+# 💡 소제목 수정 완벽 적용
+draw_consensus_cap("소형주 (3,000억원 이하)", consensus_df[consensus_df['시가총액(억)'] <= 3000], col1)
+draw_consensus_cap("중형주 (3,000억원~1조원)", consensus_df[(consensus_df['시가총액(억)'] > 3000) & (consensus_df['시가총액(억)'] <= 10000)], col2)
+draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시가총액(억)'] > 10000], col3)
 
 def draw_top10(period_col):
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
