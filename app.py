@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.5 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.6 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -142,7 +142,6 @@ draw_consensus_cap("중형주 (3,000억원~1조원)", consensus_df[(consensus_df
 draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시가총액(억)'] > 10000], col3)
 
 def draw_top10(period_col):
-    # 💡 6개월 수익률 컬럼이 없을 경우 예외 처리
     if period_col not in all_picks.columns:
         st.warning("아직 6개월 데이터가 수집되지 않았습니다.")
         return
@@ -172,7 +171,6 @@ with col_3m:
     st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
     draw_top10("3개월_수익률(%)")
 
-# 💡 UI를 5개월에서 6개월로 수정
 with col_6m:
     st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>6개월 Best</h5>", unsafe_allow_html=True)
     draw_top10("6개월_수익률(%)")
@@ -192,9 +190,8 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             continue
             
         if strat_name == "📉 낙폭과대 (엔벨로프)":
-            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '월봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
+            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
         else:
-            # 💡 하단 표도 6개월로 통일
             display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
             display_df = display_df.head(30)
             
