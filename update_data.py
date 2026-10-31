@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 import FinanceDataReader as fdr
 from pykrx import stock
 
-print("📊 [V4.5] 정확한 캘린더 기준(1, 3, 6개월) 수익률 계산 수집 시작...")
+print("📊 [V4.6] 일봉 기준 엔벨로프(20일선) 및 캘린더 수익률 계산 수집 시작...")
 
 APP_KEY = os.environ.get("KIS_APP_KEY")
 APP_SECRET = os.environ.get("KIS_APP_SECRET")
@@ -44,7 +44,6 @@ try:
 except:
     today_str = now.strftime("%Y%m%d")
 
-print("📈 전체 상장사 배당(DIV) 및 업종 데이터 확보 중...")
 try:
     time.sleep(1)
     df_fund = stock.get_market_fundamental(today_str, market="ALL")
@@ -98,16 +97,14 @@ for idx, row in df_krx.iterrows():
         env_20_sma, env_down_10, env_down_20, env_down_30 = 0.0, 0.0, 0.0, 0.0
         
         try:
-            hist = fdr.DataReader(code, now - relativedelta(months=25), now)
+            hist = fdr.DataReader(code, now - relativedelta(months=7), now)
             if not hist.empty and len(hist) > 5:
                 p_current = hist['Close'].iloc[-1]
                 
-                # 💡 정확히 달력 기준 1, 3, 6개월 전 날짜 계산
                 date_1m = now - relativedelta(months=1)
                 date_3m = now - relativedelta(months=3)
                 date_6m = now - relativedelta(months=6)
                 
-                # 해당 날짜와 가장 가까운 과거 거래일의 종가 추출
                 p_1m = hist[hist.index <= date_1m]['Close'].iloc[-1] if not hist[hist.index <= date_1m].empty else hist['Close'].iloc[0]
                 p_3m = hist[hist.index <= date_3m]['Close'].iloc[-1] if not hist[hist.index <= date_3m].empty else hist['Close'].iloc[0]
                 p_6m = hist[hist.index <= date_6m]['Close'].iloc[-1] if not hist[hist.index <= date_6m].empty else hist['Close'].iloc[0]
@@ -116,14 +113,9 @@ for idx, row in df_krx.iterrows():
                 if p_3m > 0: ret_3m = round(((p_current - p_3m) / p_3m) * 100, 2)
                 if p_6m > 0: ret_6m = round(((p_current - p_6m) / p_6m) * 100, 2)
                 
-                # 월봉 엔벨로프 계산
-                try:
-                    hist_m = hist['Close'].resample('ME').last()
-                except:
-                    hist_m = hist['Close'].resample('M').last()
-                
-                if len(hist_m) >= 20:
-                    env_20_sma = round(hist_m.tail(20).mean(), 2)
+                # 💡 일봉 기준 20일 이동평균선 및 하단선 계산
+                if len(hist) >= 20:
+                    env_20_sma = round(hist['Close'].tail(20).mean(), 2)
                     env_down_10 = round(env_20_sma * 0.9, 2)
                     env_down_20 = round(env_20_sma * 0.8, 2)
                     env_down_30 = round(env_20_sma * 0.7, 2)
@@ -134,7 +126,7 @@ for idx, row in df_krx.iterrows():
             "PER": per, "PBR": pbr, "ROE(%)": roe, "PEG": peg, "배당률(%)": div,
             "시가총액(억)": round(marcap, 2),
             "1개월_수익률(%)": ret_1m, "3개월_수익률(%)": ret_3m, "6개월_수익률(%)": ret_6m,
-            "월봉_20선": env_20_sma, "엔벨_하단_10": env_down_10, "엔벨_하단_20": env_down_20, "엔벨_하단_30": env_down_30
+            "일봉_20선": env_20_sma, "엔벨_하단_10": env_down_10, "엔벨_하단_20": env_down_20, "엔벨_하단_30": env_down_30
         })
             
         if (idx + 1) % 100 == 0:
@@ -145,6 +137,6 @@ for idx, row in df_krx.iterrows():
 if data_list:
     df_master = pd.DataFrame(data_list)
     df_master.to_csv("stock_data.csv", index=False, encoding="utf-8-sig")
-    print(f"✅ V4.5 수집 완료: 총 {len(df_master)}개 종목 저장 완료.")
+    print(f"✅ V4.6 수집 완료: 총 {len(df_master)}개 종목 저장 완료.")
 else:
     print("❌ 수집된 데이터가 없습니다."); exit(1)
