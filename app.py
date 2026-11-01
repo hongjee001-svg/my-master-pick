@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.6 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.7 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -57,6 +57,7 @@ df = pd.read_csv("stock_data.csv")
 if '업종' not in df.columns: df['업종'] = '기타'
 if '엔벨_하단_10' not in df.columns: df['엔벨_하단_10'] = 0.0
 if '엔벨_하단_20' not in df.columns: df['엔벨_하단_20'] = 0.0
+if '일봉_20선' not in df.columns: df['일봉_20선'] = df.get('월봉_20선', 0.0) # 💡 구버전 데이터 충돌 방어막
 
 df['업종'] = df['업종'].fillna('기타').astype(str)
 df = df.fillna(0)
@@ -78,11 +79,12 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
 oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10'])].copy()
+# 💡 대표님 요청 기준 완벽 반영: 현재가가 10% 하단선 이하면서, 동시에 20% 하단선 이상인 종목 (그 사이 골든존)
+envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10']) & (df['현재가'] >= df['엔벨_하단_20'])].copy()
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
-    envelope_picks = envelope_picks[(envelope_picks['이탈률(%)'] >= -5.0) & (envelope_picks['이탈률(%)'] <= 0.0)]
-    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False).head(30)
+    # 💡 30개 제한 해제 (.head(30) 삭제) -> 조건을 만족하는 모든 종목을 출력합니다.
+    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False)
 
 strategies_order = [
     ("📚 벤저민 그레이엄", graham_picks),
@@ -143,7 +145,7 @@ draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시�
 
 def draw_top10(period_col):
     if period_col not in all_picks.columns:
-        st.warning("아직 6개월 데이터가 수집되지 않았습니다.")
+        st.warning("아직 데이터가 수집되지 않았습니다.")
         return
         
     top_df = all_picks.sort_values(period_col, ascending=False).head(10)
@@ -190,7 +192,8 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             continue
             
         if strat_name == "📉 낙폭과대 (엔벨로프)":
-            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']].head(30)
+            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
+            # 엔벨로프는 전체 출력 (제한 없음)
         else:
             display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
             display_df = display_df.head(30)
