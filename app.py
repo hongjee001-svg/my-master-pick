@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V5.7 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V5.8 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -98,12 +98,12 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
 
-# 💡 V5.7: LG이노텍 확인 후 다시 안전하게 'PER > 0 (흑자)' 조건 원복
+# 💡 V5.8: 데이터 수집 봇의 PER 누락(0으로 처리됨)으로 인한 억울한 탈락을 막기 위해 PER >= 0 으로 안전장치 완화
 envelope_picks = df[
     (df['엔벨_하단_10'] > 0) & 
     (df['현재가'] <= df['엔벨_하단_10']) & 
     (df['시가총액(억)'] >= 1000) & 
-    (df['PER'] > 0) & 
+    (df['PER'] >= 0) & 
     (df['PBR'] <= 20)
 ].copy()
 
@@ -171,6 +171,24 @@ def draw_top10(period_col):
         
         top_html = f"<div class='top10-card'><div class='top10-rank'>{idx}</div><div class='top10-icon'>{icon}</div><div class='top10-info'><div class='top10-name'>{row_data['종목명']}</div><div class='top10-desc'>{name} | {row_data['업종']}</div></div><div class='top10-return' style='color:{color};'>{sign}{val}%</div></div>"
         st.markdown(top_html, unsafe_allow_html=True)
+
+# 💡 실수로 날려먹었던 1,3,6개월 Top 10 리스트 완벽 복구
+st.markdown("---")
+st.markdown("### 🔥 Best 상승률 Top 10")
+
+col_1m, col_3m, col_6m = st.columns(3)
+
+with col_1m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("1개월_수익률(%)")
+
+with col_3m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("3개월_수익률(%)")
+
+with col_6m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>6개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("6개월_수익률(%)")
 
 st.markdown("---")
 st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
