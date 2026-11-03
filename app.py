@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V5.3.1 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V5.4 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -97,13 +97,13 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
 
-# 낙폭과대 지하 제한(-20%) 해제, 흑자(PER>0), PBR<=10, 시가총액 1,000억 이상 조건
+# 💡 V5.4 수정: PBR 조건을 10에서 20 이하로 대폭 완화
 envelope_picks = df[
     (df['엔벨_하단_10'] > 0) & 
     (df['현재가'] <= df['엔벨_하단_10']) & 
     (df['시가총액(억)'] >= 1000) & 
     (df['PER'] > 0) & 
-    (df['PBR'] <= 10)
+    (df['PBR'] <= 20)
 ].copy()
 
 if not envelope_picks.empty:
