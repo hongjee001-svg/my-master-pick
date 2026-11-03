@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V5.0 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V5.1 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -97,13 +97,11 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
 
-# 💡 V5.0 수정: 거장 픽 필수 조건 해제 & PBR 10 이하로 필터 완화
 envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10']) & (df['현재가'] >= df['엔벨_하단_20']) & (df['시가총액(억)'] >= 1000) & (df['PBR'] <= 10)].copy()
 
 if not envelope_picks.empty:
     envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
     
-    # 거장 이름 매핑 (거장 추천이 없는 경우 "-" 로 표시)
     def format_master_names(masters):
         if not isinstance(masters, list) or len(masters) == 0:
             return "-"
@@ -138,12 +136,93 @@ def draw_consensus_cap(title, cap_df, col):
                 color = "#FF4D4F" if ret_val >= 0 else "#4C84FF"
                 sign = "+" if ret_val > 0 else ""
                 
-                st.markdown(f"""
-                <div class='cap-box-small'>
-                    <div class='cap-left'>
-                        <div class='cap-icon-small'>{icons}</div>
-                        <div class='cap-info-small'>
-                            <div class='cap-style-small'>{style_text} | {row['업종']}</div>
-                            <div class='cap-name-small'>{row['종목명']}</div>
-                        </div>
-                    </div>
+                # 에러 방지를 위해 HTML 문자열 변수에 담아서 렌더링
+                html_code = f"<div class='cap-box-small'><div class='cap-left'><div class='cap-icon-small'>{icons}</div><div class='cap-info-small'><div class='cap-style-small'>{style_text} | {row['업종']}</div><div class='cap-name-small'>{row['종목명']}</div></div></div><div class='cap-return-small' style='color:{color};'>{sign}{ret_val}% <span style='font-size:11px; color:#8F95A2; font-weight:normal;'>(1개월)</span></div></div>"
+                st.markdown(html_code, unsafe_allow_html=True)
+        else:
+            st.info("조건에 맞는 종목 없음")
+
+draw_consensus_cap("소형주 (1,000억원~3,000억원)", consensus_df[(consensus_df['시가총액(억)'] >= 1000) & (consensus_df['시가총액(억)'] <= 3000)], col1)
+draw_consensus_cap("중형주 (3,000억원~1조원)", consensus_df[(consensus_df['시가총액(억)'] > 3000) & (consensus_df['시가총액(억)'] <= 10000)], col2)
+draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시가총액(억)'] > 10000], col3)
+
+def draw_top10(period_col):
+    if period_col not in all_picks.columns:
+        st.warning("아직 데이터가 수집되지 않았습니다.")
+        return
+        
+    top_df = all_picks.sort_values(period_col, ascending=False).head(10)
+    if top_df.empty:
+        st.warning("표시할 종목이 없습니다.")
+        return
+    for idx, row in enumerate(top_df.iterrows(), 1):
+        row_data = row[1]
+        icon, name = row_data['거장스타일'].split(' ', 1)
+        val = row_data[period_col]
+        color = "#FF4D4F" if val >= 0 else "#4C84FF"
+        sign = "+" if val > 0 else ""
+        
+        # 에러 방지용 한 줄 HTML
+        top_html = f"<div class='top10-card'><div class='top10-rank'>{idx}</div><div class='top10-icon'>{icon}</div><div class='top10-info'><div class='top10-name'>{row_data['종목명']}</div><div class='top10-desc'>{name} | {row_data['업종']}</div></div><div class='top10-return' style='color:{color};'>{sign}{val}%</div></div>"
+        st.markdown(top_html, unsafe_allow_html=True)
+
+st.markdown("---")
+st.markdown("### 🔥 Best 상승률 Top 10")
+
+col_1m, col_3m, col_6m = st.columns(3)
+
+with col_1m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("1개월_수익률(%)")
+
+with col_3m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("3개월_수익률(%)")
+
+with col_6m:
+    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>6개월 Best</h5>", unsafe_allow_html=True)
+    draw_top10("6개월_수익률(%)")
+
+st.markdown("---")
+st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
+
+strategies_dict = {name: df for name, df in strategies_order}
+strategies_dict["📉 낙폭과대 (엔벨로프)"] = envelope_picks
+
+master_tabs = st.tabs(list(strategies_dict.keys()))
+
+for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
+    with master_tabs[i]:
+        if res_df.empty:
+            st.warning("현재 조건에 만족하는 종목이 없습니다.")
+            continue
+            
+        if strat_name == "📉 낙폭과대 (엔벨로프)":
+            display_df = res_df[['종목명', '업종', '추천거장', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
+        else:
+            display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
+            display_df = display_df.head(30)
+            
+        display_df.index = range(1, len(display_df) + 1)
+        st.dataframe(display_df.round(2), width="stretch")
+        
+        col_ai1, col_ai2 = st.columns([2, 1])
+        with col_ai1:
+            selected_stock = st.selectbox("분석할 종목 선택:", options=display_df['종목명'], key=f"sel_{i}")
+        with col_ai2:
+            st.write("")
+            st.write("")
+            if st.button("✨ AI 투자 리포트 생성", key=f"btn_{i}", width="stretch"):
+                if not saved_keys:
+                    st.warning("왼쪽 사이드바에서 API 키를 먼저 추가해주세요.")
+                else:
+                    with st.spinner("Gemini Pro가 심층 분석을 진행 중입니다..."):
+                        info = display_df[display_df['종목명'] == selected_stock].iloc[0]
+                        prompt_text = f"분석 타겟 종목: {info['종목명']} (업종: {info['업종']})\n분석 접근 전략: {strat_name}\n\n위 종목의 현재 지표 현황과 산업 특징, 그리고 선택된 전략의 관점에서 현재 모멘텀의 매력도와 진입 시 고려해야 할 리스크를 3문단으로 심도 있게 요약해 줘."
+                        
+                        try:
+                            model = genai.GenerativeModel('gemini-1.5-pro')
+                            st.success(f"[{selected_stock}] Gemini Pro 심층 분석 완료")
+                            st.write(model.generate_content(prompt_text).text)
+                        except Exception as e:
+                            st.error(f"오류가 발생했습니다: {e}")
