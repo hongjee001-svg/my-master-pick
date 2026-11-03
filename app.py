@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V4.7 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V4.9 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -57,7 +57,7 @@ df = pd.read_csv("stock_data.csv")
 if '업종' not in df.columns: df['업종'] = '기타'
 if '엔벨_하단_10' not in df.columns: df['엔벨_하단_10'] = 0.0
 if '엔벨_하단_20' not in df.columns: df['엔벨_하단_20'] = 0.0
-if '일봉_20선' not in df.columns: df['일봉_20선'] = df.get('월봉_20선', 0.0) # 💡 구버전 데이터 충돌 방어막
+if '일봉_20선' not in df.columns: df['일봉_20선'] = df.get('월봉_20선', 0.0)
 
 df['업종'] = df['업종'].fillna('기타').astype(str)
 df = df.fillna(0)
@@ -79,13 +79,6 @@ greenblatt_picks = magic_df.sort_values('마법순위', ascending=True).head(30)
 
 oneil_picks = safe_df[(safe_df['ROE(%)'] >= 10) & (safe_df['시가총액(억)'] >= 1000)].sort_values('1개월_수익률(%)', ascending=False).head(30)
 
-# 💡 대표님 요청 기준 완벽 반영: 현재가가 10% 하단선 이하면서, 동시에 20% 하단선 이상인 종목 (그 사이 골든존)
-envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10']) & (df['현재가'] >= df['엔벨_하단_20'])].copy()
-if not envelope_picks.empty:
-    envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
-    # 💡 30개 제한 해제 (.head(30) 삭제) -> 조건을 만족하는 모든 종목을 출력합니다.
-    envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False)
-
 strategies_order = [
     ("📚 벤저민 그레이엄", graham_picks),
     ("👴 워런 버핏", buffett_picks),
@@ -103,6 +96,30 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     중복횟수=('거장스타일', 'count'),
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
+
+# 💡 낙폭과대 퀄리티 필터 추가: 1,000억 이상 & PBR 5 이하 & 거장 픽 교집합
+envelope_picks = df[(df['엔벨_하단_10'] > 0) & (df['현재가'] <= df['엔벨_하단_10']) & (df['현재가'] >= df['엔벨_하단_20']) & (df['시가총액(억)'] >= 1000) & (df['PBR'] <= 5)].copy()
+
+if not envelope_picks.empty:
+    master_codes = consensus_df['종목코드'].tolist()
+    envelope_picks = envelope_picks[envelope_picks['종목코드'].isin(master_codes)].copy()
+    
+    if not envelope_picks.empty:
+        envelope_picks['이탈률(%)'] = round(((envelope_picks['현재가'] - envelope_picks['엔벨_하단_10']) / envelope_picks['엔벨_하단_10']) * 100, 2)
+        
+        # 💡 거장 이름 추출 후 가나다순(알파벳순) 정렬 적용
+        def format_master_names(masters):
+            # 거장 이름만 뽑아서 정렬
+            sorted_names = sorted([m.split(' ', 1)[1] for m in masters])
+            first_master = sorted_names[0]
+            if len(masters) > 1:
+                return f"{first_master} 외 {len(masters)-1}"
+            return first_master
+            
+        master_map = consensus_df.set_index('종목코드')['거장목록'].apply(format_master_names).to_dict()
+        envelope_picks['추천거장'] = envelope_picks['종목코드'].map(master_map)
+        
+        envelope_picks = envelope_picks.sort_values('이탈률(%)', ascending=False)
 
 col1, col2, col3 = st.columns(3)
 def draw_consensus_cap(title, cap_df, col):
@@ -124,6 +141,7 @@ def draw_consensus_cap(title, cap_df, col):
                 color = "#FF4D4F" if ret_val >= 0 else "#4C84FF"
                 sign = "+" if ret_val > 0 else ""
                 
+                # 💡 오해 방지를 위해 수치 옆에 '(1개월)' 표기 추가
                 st.markdown(f"""
                 <div class='cap-box-small'>
                     <div class='cap-left'>
@@ -133,13 +151,14 @@ def draw_consensus_cap(title, cap_df, col):
                             <div class='cap-name-small'>{row['종목명']}</div>
                         </div>
                     </div>
-                    <div class='cap-return-small' style='color:{color};'>{sign}{ret_val}%</div>
+                    <div class='cap-return-small' style='color:{color};'>{sign}{ret_val}% <span style='font-size:11px; color:#8F95A2; font-weight:normal;'>(1개월)</span></div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.info("조건에 맞는 종목 없음")
 
-draw_consensus_cap("소형주 (3,000억원 이하)", consensus_df[consensus_df['시가총액(억)'] <= 3000], col1)
+# 💡 소형주 기준 변경: 1,000억 미만 초소형주 원천 제외 (1,000억~3,000억)
+draw_consensus_cap("소형주 (1,000억원~3,000억원)", consensus_df[(consensus_df['시가총액(억)'] >= 1000) & (consensus_df['시가총액(억)'] <= 3000)], col1)
 draw_consensus_cap("중형주 (3,000억원~1조원)", consensus_df[(consensus_df['시가총액(억)'] > 3000) & (consensus_df['시가총액(억)'] <= 10000)], col2)
 draw_consensus_cap("대형주 (1조원 초과)", consensus_df[consensus_df['시가총액(억)'] > 10000], col3)
 
@@ -192,8 +211,8 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             continue
             
         if strat_name == "📉 낙폭과대 (엔벨로프)":
-            display_df = res_df[['종목명', '업종', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
-            # 엔벨로프는 전체 출력 (제한 없음)
+            # 💡 요청하신 컬럼 순서 완벽 적용: 종목명 - 업종 - 추천거장 - 현재가
+            display_df = res_df[['종목명', '업종', '추천거장', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
         else:
             display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
             display_df = display_df.head(30)
