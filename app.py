@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V5.4 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V5.5 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -57,6 +57,7 @@ df = pd.read_csv("stock_data.csv")
 if '업종' not in df.columns: df['업종'] = '기타'
 if '엔벨_하단_10' not in df.columns: df['엔벨_하단_10'] = 0.0
 if '엔벨_하단_20' not in df.columns: df['엔벨_하단_20'] = 0.0
+if '엔벨_하단_30' not in df.columns: df['엔벨_하단_30'] = 0.0
 if '일봉_20선' not in df.columns: df['일봉_20선'] = df.get('월봉_20선', 0.0)
 
 df['업종'] = df['업종'].fillna('기타').astype(str)
@@ -97,7 +98,7 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
 
-# 💡 V5.4 수정: PBR 조건을 10에서 20 이하로 대폭 완화
+# 낙폭과대 베이스 수집 (10% 하단선 이탈, 시총 1000억 이상, 흑자, PBR 20 이하)
 envelope_picks = df[
     (df['엔벨_하단_10'] > 0) & 
     (df['현재가'] <= df['엔벨_하단_10']) & 
@@ -172,23 +173,6 @@ def draw_top10(period_col):
         st.markdown(top_html, unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown("### 🔥 Best 상승률 Top 10")
-
-col_1m, col_3m, col_6m = st.columns(3)
-
-with col_1m:
-    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>1개월 Best</h5>", unsafe_allow_html=True)
-    draw_top10("1개월_수익률(%)")
-
-with col_3m:
-    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>3개월 Best</h5>", unsafe_allow_html=True)
-    draw_top10("3개월_수익률(%)")
-
-with col_6m:
-    st.markdown("<h5 style='text-align:center; color:#E0E2E7;'>6개월 Best</h5>", unsafe_allow_html=True)
-    draw_top10("6개월_수익률(%)")
-
-st.markdown("---")
 st.markdown("### 🔍 7대 거장별 전체 리스트 + 📉 차트 낙폭과대 분석")
 
 strategies_dict = {name: df for name, df in strategies_order}
@@ -204,15 +188,47 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             
         if strat_name == "📉 낙폭과대 (엔벨로프)":
             display_df = res_df[['종목명', '업종', '추천거장', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
+            
+            # 💡 서브 탭 분리: M-1, M-2, M-3
+            st.markdown("<br>", unsafe_allow_html=True)
+            env_tabs = st.tabs(["🟢 M-1 (10%선 이탈)", "🟡 M-2 (20%선 이탈)", "🔴 M-3 (30%선 이탈)"])
+            
+            m1_df = display_df[display_df['현재가'] > display_df['엔벨_하단_20']]
+            m2_df = display_df[(display_df['현재가'] <= display_df['엔벨_하단_20']) & (display_df['현재가'] > display_df['엔벨_하단_30'])]
+            m3_df = display_df[display_df['현재가'] <= display_df['엔벨_하단_30']]
+            
+            with env_tabs[0]:
+                st.markdown("**📌 M-1 구간:** 1차 하단선(-10%)은 돌파했으나 2차 하단선(-20%) 위에 있는 종목")
+                if m1_df.empty: st.info("현재 M-1 구간에 진입한 종목이 없습니다.")
+                else: 
+                    m1_df.index = range(1, len(m1_df) + 1)
+                    st.dataframe(m1_df.round(2), width="stretch")
+            
+            with env_tabs[1]:
+                st.markdown("**📌 M-2 구간:** 2차 하단선(-20%)을 돌파하여 투매가 진행 중인 종목")
+                if m2_df.empty: st.info("현재 M-2 구간에 진입한 종목이 없습니다.")
+                else: 
+                    m2_df.index = range(1, len(m2_df) + 1)
+                    st.dataframe(m2_df.round(2), width="stretch")
+                    
+            with env_tabs[2]:
+                st.markdown("**📌 M-3 구간:** 3차 하단선(-30%)까지 무너진 극한의 과매도 종목")
+                if m3_df.empty: st.info("현재 M-3 구간에 진입한 종목이 없습니다.")
+                else: 
+                    m3_df.index = range(1, len(m3_df) + 1)
+                    st.dataframe(m3_df.round(2), width="stretch")
+            
+            st.markdown("<hr>", unsafe_allow_html=True)
+            
         else:
             display_df = res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', '6개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']] if '6개월_수익률(%)' in res_df.columns else res_df[['종목명', '업종', '현재가', '1개월_수익률(%)', '3개월_수익률(%)', 'PER', 'PBR', 'ROE(%)', 'PEG', '배당률(%)']]
             display_df = display_df.head(30)
+            display_df.index = range(1, len(display_df) + 1)
+            st.dataframe(display_df.round(2), width="stretch")
             
-        display_df.index = range(1, len(display_df) + 1)
-        st.dataframe(display_df.round(2), width="stretch")
-        
         col_ai1, col_ai2 = st.columns([2, 1])
         with col_ai1:
+            # AI 분석용 종목 리스트 (M1~M3 전체 통합)
             selected_stock = st.selectbox("분석할 종목 선택:", options=display_df['종목명'], key=f"sel_{i}")
         with col_ai2:
             st.write("")
