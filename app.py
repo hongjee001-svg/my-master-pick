@@ -47,7 +47,7 @@ with st.sidebar:
     else:
         st.warning("API 키를 추가해주세요.")
 
-st.title("👑 7대 거장 마스터픽 스크리너 (V5.5 Pro)")
+st.title("👑 7대 거장 마스터픽 스크리너 (V5.7 Pro)")
 
 if not os.path.exists("stock_data.csv"):
     st.info("🔄 데이터를 수집 중입니다. 잠시만 기다려주세요.")
@@ -98,7 +98,7 @@ consensus_df = all_picks_raw.groupby(['종목코드', '종목명', '업종', '�
     거장목록=('거장스타일', lambda x: list(x))
 ).reset_index()
 
-# 낙폭과대 베이스 수집 (10% 하단선 이탈, 시총 1000억 이상, 흑자, PBR 20 이하)
+# 💡 V5.7: LG이노텍 확인 후 다시 안전하게 'PER > 0 (흑자)' 조건 원복
 envelope_picks = df[
     (df['엔벨_하단_10'] > 0) & 
     (df['현재가'] <= df['엔벨_하단_10']) & 
@@ -189,7 +189,6 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
         if strat_name == "📉 낙폭과대 (엔벨로프)":
             display_df = res_df[['종목명', '업종', '추천거장', '현재가', '이탈률(%)', '일봉_20선', '엔벨_하단_10', '엔벨_하단_20', '엔벨_하단_30', 'PER', 'PBR']]
             
-            # 💡 서브 탭 분리: M-1, M-2, M-3
             st.markdown("<br>", unsafe_allow_html=True)
             env_tabs = st.tabs(["🟢 M-1 (10%선 이탈)", "🟡 M-2 (20%선 이탈)", "🔴 M-3 (30%선 이탈)"])
             
@@ -228,7 +227,6 @@ for i, (strat_name, res_df) in enumerate(strategies_dict.items()):
             
         col_ai1, col_ai2 = st.columns([2, 1])
         with col_ai1:
-            # AI 분석용 종목 리스트 (M1~M3 전체 통합)
             selected_stock = st.selectbox("분석할 종목 선택:", options=display_df['종목명'], key=f"sel_{i}")
         with col_ai2:
             st.write("")
